@@ -341,6 +341,38 @@ speaks one of three API shapes:
 | `custom` | `anthropic-messages` | `POST <base>/messages` | `x-api-key` + `anthropic-version` |
 | `custom` | `openai-responses` | `POST <base>/responses` | `Authorization: Bearer` |
 | `azure-foundry` | — | `POST <base>/openai/v1/chat/completions?api-version=…` | `api-key` (model→deployment) |
+| `github-copilot` | — | `POST <copilot-host>/chat/completions` | OAuth device flow → Bearer (no API key) |
+
+### GitHub Copilot (OAuth)
+
+`-p github-copilot` uses your **GitHub Copilot seat** instead of an API key.
+Auth is the standard device flow, same as the VS Code Copilot extension:
+
+```bash
+promptsmith --copilot-login     # open github.com/login/device, enter the code
+promptsmith --copilot-status    # who you are + token validity
+promptsmith -p github-copilot --list-models
+promptsmith -p github-copilot -m gpt-4.1 "review this SQL migration"
+promptsmith --copilot-logout    # delete cached credentials
+```
+
+How it works:
+
+1. Device-code OAuth against `github.com` yields a **long-lived GitHub token**.
+2. That token is exchanged at `api.github.com/copilot_internal/v2/token` for a
+   **short-lived Copilot API token** (~30 min) plus the account's API host.
+   Enterprise seats get a private host (`api.enterprise.githubcopilot.com`);
+   promptsmith always adopts whatever `endpoints.api` reports, so enterprise
+   seats route correctly.
+3. The short-lived token auto-refreshes when it is within 5 minutes of expiry —
+   you log in once.
+
+Credentials are cached in `~/.config/promptsmith/copilot.json` (mode `0600`).
+`-k/--api-key`, `-u/--base-url` and `-s/--api-shape` are ignored for this
+provider — the host comes from the token exchange. Default model is `gpt-4.1`
+(Copilot has its own catalog; `--list-models` shows what your seat exposes).
+An existing GitHub OAuth token can be supplied via `PROMPTSMITH_GITHUB_TOKEN`
+instead of running `--copilot-login`.
 
 The base URL is normalized like omni-agent-desktop: trailing slashes are
 stripped, and if the URL has no path after the host, `/v1` is appended
@@ -358,8 +390,9 @@ file, or a built-in default. Higher in this list wins:
 | Provider | `-p`, `--provider` | `PROMPTSMITH_PROVIDER` | `provider` | `custom` |
 | API shape | `-s`, `--api-shape` | `PROMPTSMITH_API_SHAPE` | `api_shape` | `openai-compatible` |
 | Base URL | `-u`, `--base-url` | `PROMPTSMITH_BASE_URL` | `base_url` | `http://localhost:5000/v1` |
-| Model | `-m`, `--model` | `PROMPTSMITH_MODEL` | `model` | `gpt-5.5` |
+| Model | `-m`, `--model` | `PROMPTSMITH_MODEL` | `model` | `gpt-5.5` (`gpt-4.1` for `github-copilot`) |
 | API key | `-k`, `--api-key` | `PROMPTSMITH_API_KEY` | `api_key` | falls back to `~/.config/omnillm/api-key` |
+| GitHub token | — | `PROMPTSMITH_GITHUB_TOKEN` | `copilot.json` | from `--copilot-login` |
 | Temperature | `-t`, `--temperature` | — | — | `0.3` |
 | Technique(s) | `-T`, `--technique` | — | — | auto-selected |
 | Mode | `--mode` | — | — | `system` |
@@ -488,10 +521,27 @@ promptsmith/
     techniques.go         technique catalog + embedded reference guides
     modes.go              optimization modes/styles, iterate + eval templates
     compare.go            A/B compare, templatize, local variable render
+    copilot.go            GitHub Copilot OAuth device flow + token refresh
     techniques/           embedded copies of the 17 guides (synced by install.sh)
     go.mod
     install.sh            installer (go build + config scaffold)
   prompt-engineering/     the Hermes skill (methodology + 17 reference guides)
+    PROMPTSMITH_SYSTEM_PROMPT.md   promptsmith's own agent system prompt
+```
+
+## promptsmith's own system prompt
+
+The identity promptsmith runs on is documented as a portable, paste-anywhere
+system prompt in
+[`prompt-engineering/PROMPTSMITH_SYSTEM_PROMPT.md`](prompt-engineering/PROMPTSMITH_SYSTEM_PROMPT.md)
+— use it to give any LLM or agent promptsmith behaviour without the CLI.
+
+To see the *live* prompt the CLI actually sends (base doctrine plus the active
+mode/style/target/technique directives), run:
+
+```bash
+promptsmith --show-system
+promptsmith --show-system --mode user --style planning --target reasoning -T cot
 ```
 
 ## Credits
