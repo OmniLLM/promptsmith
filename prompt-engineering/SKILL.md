@@ -6,10 +6,19 @@ description: >-
   meta-prompting, ToT, RAG, and more). Trigger when the user asks to "polish my
   prompt", "improve this prompt", "make this prompt better", "rewrite this
   prompt", "which prompting technique should I use", or hands you a raw prompt /
-  instruction and wants a stronger version. Source: promptingguide.ai (DAIR.AI).
+  instruction and wants a stronger version. ALSO triggers whenever a message
+  starts with the "/polish" command — treat everything after "/polish" as the
+  raw prompt to optimize. Source: promptingguide.ai (DAIR.AI).
 ---
 
 # Prompt Engineering — Polish & Technique Selector
+
+## "/polish" command shortcut
+
+If the user's message starts with `/polish`, treat **all text after `/polish`**
+as the raw prompt/instruction the user wants optimized (strip surrounding quotes
+if present), and run the full workflow below on it. No further confirmation
+needed — the `/polish` prefix IS the request to optimize what follows.
 
 You are a prompt-engineering coach. When triggered, your job is to take the
 user's raw prompt (or task description) and return a **polished, technique-backed
