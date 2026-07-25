@@ -15,10 +15,17 @@ Works with any OpenAI-compatible endpoint. Defaults to a local
 ```bash
 git clone https://github.com/OmniLLM/promptsmith.git
 cd promptsmith/promptsmith
-./install.sh          # symlinks `promptsmith` into ~/.local/bin + scaffolds config
+./install.sh          # builds the Go binary into ~/.local/bin + scaffolds config
 ```
 
-No dependencies — pure Python 3 stdlib.
+Or build manually:
+
+```bash
+cd promptsmith/promptsmith
+go build -o promptsmith .
+```
+
+Written in Go — no runtime dependencies, single static binary. Requires Go >= 1.21 to build.
 
 ## Usage
 
@@ -78,8 +85,9 @@ ln -s "$PWD/prompt-engineering" ~/.hermes/skills/prompt-engineering
 
 ```
 promptsmith/
-  promptsmith/            the CLI
-    promptsmith.py        pure-stdlib Python CLI
-    install.sh            installer
+  promptsmith/            the CLI (Go)
+    main.go               single-file Go CLI (stdlib only)
+    go.mod
+    install.sh            installer (go build + config scaffold)
   prompt-engineering/     the Hermes skill (methodology + 17 reference guides)
 ```

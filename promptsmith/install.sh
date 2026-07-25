@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# promptsmith installer — puts the CLI on your PATH and scaffolds a config file.
+# promptsmith installer — builds the Go binary, installs it on your PATH,
+# and scaffolds a config file.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,12 +8,13 @@ BIN_DIR="${PROMPTSMITH_BIN_DIR:-$HOME/.local/bin}"
 CFG_DIR="$HOME/.config/promptsmith"
 CFG_FILE="$CFG_DIR/config.json"
 
+command -v go >/dev/null 2>&1 || { echo "error: Go toolchain not found. Install Go >=1.21." >&2; exit 1; }
+
 mkdir -p "$BIN_DIR" "$CFG_DIR"
 
-# Symlink the CLI onto PATH
-ln -sf "$HERE/promptsmith.py" "$BIN_DIR/promptsmith"
-chmod +x "$HERE/promptsmith.py"
-echo "linked $BIN_DIR/promptsmith -> $HERE/promptsmith.py"
+echo "building promptsmith..."
+( cd "$HERE" && go build -o "$BIN_DIR/promptsmith" . )
+echo "installed $BIN_DIR/promptsmith"
 
 # Scaffold config if missing
 if [[ ! -f "$CFG_FILE" ]]; then
