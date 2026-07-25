@@ -20,6 +20,8 @@ echo "installed $BIN_DIR/promptsmith"
 if [[ ! -f "$CFG_FILE" ]]; then
   cat > "$CFG_FILE" <<'JSON'
 {
+  "provider": "custom",
+  "api_shape": "openai-compatible",
   "base_url": "http://localhost:5000/v1",
   "model": "gpt-5.5"
 }

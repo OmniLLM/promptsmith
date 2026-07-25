@@ -1,0 +1,5 @@
+6dee369c073abe388a7d047886bb2be4755ee410c2a31471f7c1674cc27caeb1  promptsmith-darwin-amd64.tar.gz
+8cf1c859410d42d057dfc9b5b909a400a307ab3c79b543d51c0e9df1ca7c6c8b  promptsmith-darwin-arm64.tar.gz
+3f9868e102425ef00d3bbae6f9bec4d10cdddb8034ed398f68fad859ad5f43ba  promptsmith-linux-amd64.tar.gz
+0faf7070c336d5465a9828fa11a327436941693744301cb0dca55497d30e8610  promptsmith-linux-arm64.tar.gz
+975c2c5dabc82d4e19dbb6d67b0dc9a104fa2bb48362ec1d8f362d94f24877e4  promptsmith-windows-amd64.zip

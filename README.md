@@ -7,7 +7,10 @@ a **polished, technique-backed** version — powered by an LLM and grounded in t
 few-shot, chain-of-thought, self-consistency, ReAct, meta-prompting, ToT, RAG,
 PAL, Reflexion, and more).
 
-Works with any OpenAI-compatible endpoint. Defaults to a local
+Supports the same providers as
+[omni-agent-desktop](https://github.com/OmniLLM/omni-agent-desktop) — a custom
+provider in three API shapes (openai-compatible, anthropic-messages,
+openai-responses) plus Azure AI Foundry. Defaults to a local
 [OmniLLM](https://github.com/OmniLLM/omnillm) proxy at `http://localhost:5000/v1`.
 
 ## Install
@@ -50,9 +53,21 @@ Use `--raw` to get only the rewritten prompt (great for piping/scripting).
 
 ## Configuring the LLM provider
 
-promptsmith speaks the **OpenAI Chat Completions API** (`POST /chat/completions`
-and `GET /models`). Any provider or proxy that exposes that shape works — you
-only need to set three things: **base URL**, **model**, and **API key**.
+promptsmith supports the **same providers and wire shapes as
+[omni-agent-desktop](https://github.com/OmniLLM/omni-agent-desktop)**, so a
+config that works there works here. Two provider types, and the custom provider
+speaks one of three API shapes:
+
+| Provider (`-p`) | API shape (`-s`) | Request | Auth header |
+|---|---|---|---|
+| `custom` | `openai-compatible` (default) | `POST <base>/chat/completions` | `Authorization: Bearer` |
+| `custom` | `anthropic-messages` | `POST <base>/messages` | `x-api-key` + `anthropic-version` |
+| `custom` | `openai-responses` | `POST <base>/responses` | `Authorization: Bearer` |
+| `azure-foundry` | — | `POST <base>/openai/v1/chat/completions?api-version=…` | `api-key` (model→deployment) |
+
+The base URL is normalized like omni-agent-desktop: trailing slashes are
+stripped, and if the URL has no path after the host, `/v1` is appended
+(so `http://localhost:5000` becomes `http://localhost:5000/v1`).
 
 ### Settings & precedence
 
@@ -63,23 +78,28 @@ file, or a built-in default. Higher in this list wins:
 
 | Setting | Flag | Env var | Config key | Default |
 |---|---|---|---|---|
+| Provider | `-p`, `--provider` | `PROMPTSMITH_PROVIDER` | `provider` | `custom` |
+| API shape | `-s`, `--api-shape` | `PROMPTSMITH_API_SHAPE` | `api_shape` | `openai-compatible` |
 | Base URL | `-u`, `--base-url` | `PROMPTSMITH_BASE_URL` | `base_url` | `http://localhost:5000/v1` |
 | Model | `-m`, `--model` | `PROMPTSMITH_MODEL` | `model` | `gpt-5.5` |
 | API key | `-k`, `--api-key` | `PROMPTSMITH_API_KEY` | `api_key` | falls back to `~/.config/omnillm/api-key` |
 | Temperature | `-t`, `--temperature` | — | — | `0.3` |
 
-> The base URL must include the API version path (e.g. `.../v1`). promptsmith
-> appends `/chat/completions` and `/models` to whatever you give it.
-
 ### Config file
 
-`~/.config/promptsmith/config.json` (created by `install.sh`):
+`~/.config/promptsmith/config.json` (created by `install.sh`). Full schema:
 
 ```json
 {
+  "provider": "custom",
+  "api_shape": "openai-compatible",
   "base_url": "http://localhost:5000/v1",
   "model": "gpt-5.5",
-  "api_key": ""
+  "api_key": "",
+  "azure_api_version": "2024-02-01",
+  "azure_deployments": [
+    { "model": "gpt-4o", "deployment": "my-gpt4o-deployment" }
+  ]
 }
 ```
 
@@ -89,67 +109,73 @@ the key out of the config file and in `PROMPTSMITH_API_KEY` is recommended.
 ### Provider recipes
 
 **OmniLLM (default, local proxy)** — nothing to configure. promptsmith points at
-`http://localhost:5000/v1` and reads the key from `~/.config/omnillm/api-key`
-automatically. Just run `promptsmith "..."`.
+`http://localhost:5000/v1` (openai-compatible) and reads the key from
+`~/.config/omnillm/api-key` automatically. Just run `promptsmith "..."`.
 
-**OpenAI**
+OmniLLM also speaks the Anthropic and Responses shapes for the right models:
+
+```bash
+promptsmith -s anthropic-messages -m claude-opus-4.8 "polish this"
+promptsmith -s openai-responses   -m gpt-5.5          "polish this"
+```
+
+**OpenAI** (openai-compatible)
 
 ```json
-{
-  "base_url": "https://api.openai.com/v1",
-  "model": "gpt-4o"
-}
+{ "provider": "custom", "api_shape": "openai-compatible",
+  "base_url": "https://api.openai.com/v1", "model": "gpt-4o" }
 ```
 ```bash
 export PROMPTSMITH_API_KEY="sk-..."
-promptsmith "polish this prompt"
 ```
 
-**Anthropic (via an OpenAI-compatible gateway/proxy)** — Anthropic's native API
-is not OpenAI-shaped, so route it through a proxy such as OmniLLM, LiteLLM, or
-one-api:
+**Anthropic** (native Messages API, `anthropic-messages` shape)
 
 ```json
-{ "base_url": "http://localhost:5000/v1", "model": "claude-opus-4.8" }
+{ "provider": "custom", "api_shape": "anthropic-messages",
+  "base_url": "https://api.anthropic.com", "model": "claude-3-5-sonnet-latest" }
+```
+```bash
+export PROMPTSMITH_API_KEY="sk-ant-..."
 ```
 
-**Groq**
+**Azure AI Foundry** (`api-key` header, logical model → deployment mapping)
+
+```json
+{
+  "provider": "azure-foundry",
+  "base_url": "https://my-resource.openai.azure.com",
+  "azure_api_version": "2024-02-01",
+  "model": "gpt-4o",
+  "azure_deployments": [{ "model": "gpt-4o", "deployment": "my-gpt4o-deployment" }]
+}
+```
+```bash
+export PROMPTSMITH_API_KEY="<azure-key>"
+```
+
+**Groq / OpenRouter / together / etc.** — any OpenAI-compatible endpoint:
 
 ```json
 { "base_url": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile" }
-```
-```bash
-export PROMPTSMITH_API_KEY="gsk_..."
+{ "base_url": "https://openrouter.ai/api/v1",   "model": "anthropic/claude-3.5-sonnet" }
 ```
 
-**OpenRouter**
-
-```json
-{ "base_url": "https://openrouter.ai/api/v1", "model": "anthropic/claude-3.5-sonnet" }
-```
-```bash
-export PROMPTSMITH_API_KEY="sk-or-..."
-```
-
-**Local vLLM / llama.cpp / Ollama** — anything exposing an OpenAI-compatible
-server:
+**Local vLLM / llama.cpp / Ollama** — OpenAI-compatible servers usually ignore
+the key, but a non-empty placeholder is still required:
 
 ```bash
-# vLLM
-promptsmith -u http://localhost:8000/v1 -m meta-llama/Llama-3.1-8B-Instruct -k EMPTY "..."
-# Ollama
+promptsmith -u http://localhost:8000/v1  -m meta-llama/Llama-3.1-8B-Instruct -k EMPTY "..."
 promptsmith -u http://localhost:11434/v1 -m llama3.1 -k ollama "..."
 ```
-
-Local servers usually ignore the key, but the OpenAI client still requires a
-non-empty value — pass any placeholder (`EMPTY`, `ollama`, etc.).
 
 ### One-off overrides
 
 Flags override everything for a single run without touching your config:
 
 ```bash
-promptsmith -u https://api.openai.com/v1 -m gpt-4o -k "$OPENAI_API_KEY" "improve this"
+promptsmith -p custom -s anthropic-messages -u https://api.anthropic.com \
+  -m claude-3-5-sonnet-latest -k "$ANTHROPIC_API_KEY" "improve this"
 ```
 
 ### Verify your setup
@@ -158,8 +184,9 @@ promptsmith -u https://api.openai.com/v1 -m gpt-4o -k "$OPENAI_API_KEY" "improve
 promptsmith --list-models     # confirms base URL + key reach the provider
 ```
 
-If this prints models, you're wired up correctly. A connection or `HTTP 401`
-error here points to a wrong `base_url` or `api_key`.
+Works for the `openai-compatible` shape and `azure-foundry` (both expose
+`GET /models`). If it prints models, you're wired up correctly; a connection or
+`HTTP 401` error points to a wrong `base_url` or `api_key`.
 
 ## Hermes skill
 
