@@ -12,6 +12,14 @@ command -v go >/dev/null 2>&1 || { echo "error: Go toolchain not found. Install 
 
 mkdir -p "$BIN_DIR" "$CFG_DIR"
 
+# Keep the embedded technique guides in sync with the canonical skill references.
+REFS="$HERE/../prompt-engineering/references"
+if [[ -d "$REFS" ]]; then
+  mkdir -p "$HERE/techniques"
+  cp "$REFS"/*.md "$HERE/techniques/"
+  echo "synced $(ls -1 "$HERE/techniques" | wc -l | tr -d ' ') technique guides"
+fi
+
 echo "building promptsmith..."
 ( cd "$HERE" && go build -o "$BIN_DIR/promptsmith" . )
 echo "installed $BIN_DIR/promptsmith"
