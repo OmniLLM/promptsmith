@@ -617,6 +617,8 @@ Operations:
       --iterate req     Refine an existing prompt: -f old.md --iterate "add JSON output"
       --eval            Score the prompt (0-100 across 5 dimensions) + patch plan
       --json            With --eval, emit the raw JSON instead of a report
+      --min-score n     With --eval, exit 2 if the overall score is below n
+                        (for CI gating of prompt files)
       --compare path    A/B test: -f new.md --compare old.md --test "a question"
       --test input      Test input for --compare (required with --compare)
       --show-outputs    With --compare, also print both raw outputs
@@ -647,6 +649,7 @@ GitHub Copilot (OAuth device flow, uses your Copilot seat — no API key):
 Examples:
   promptsmith --mode user --style planning "help me launch a newsletter"
   promptsmith -f prompt.md --eval
+  promptsmith -f prompt.md --eval --min-score 70    # CI gate
   promptsmith -f prompt.md --iterate "make the output JSON" -o prompt.v2.md
   promptsmith -f v2.md --compare v1.md --test "review this login function"
   promptsmith -f prompt.md --templatize --vars-out vars.json
@@ -711,6 +714,7 @@ func main() {
 		raw, listModelsFlag, helpFlag              bool
 		listTechFlag                               bool
 		listModesFlag, evalFlag, jsonFlag          bool
+		minScore, evalScore                        int
 		templatizeFlag, renderFlag                 bool
 		showOutputs, strictFlag                    bool
 		copilotLoginFlag, copilotLogoutFlag        bool
@@ -747,6 +751,7 @@ func main() {
 	fs.StringVar(&iterateReq, "iterate", "", "iteration request")
 	fs.BoolVar(&evalFlag, "eval", false, "evaluate prompt")
 	fs.BoolVar(&jsonFlag, "json", false, "raw json for --eval")
+	fs.IntVar(&minScore, "min-score", 0, "exit 2 if --eval scores below this")
 	fs.StringVar(&compareFile, "compare", "", "compare against this prompt file")
 	fs.StringVar(&testInput, "test", "", "test input for --compare")
 	fs.BoolVar(&showOutputs, "show-outputs", false, "print both outputs")
@@ -866,7 +871,7 @@ func main() {
 		// A = the --compare file (baseline), B = the main input (candidate).
 		out = runCompare(cfg, apiKey, temperature, string(b), promptText, testInput, showOutputs, jsonFlag)
 	case evalFlag:
-		out = runEval(cfg, apiKey, temperature, promptText, jsonFlag)
+		out, evalScore = runEval(cfg, apiKey, temperature, promptText, jsonFlag)
 	case iterateReq != "":
 		out = runIterate(cfg, apiKey, temperature, promptText, iterateReq, raw)
 	default:
@@ -886,5 +891,18 @@ func main() {
 			fail("cannot write %s — %v", outFile, err)
 		}
 		fmt.Fprintf(os.Stderr, "promptsmith: wrote %s\n", outFile)
+	}
+	// CI gate: a score below the threshold is a non-zero exit so `--eval
+	// --min-score N` can fail a pipeline. Exit 2 distinguishes "ran fine,
+	// prompt is below bar" from exit 1 ("the tool itself failed").
+	if evalFlag && minScore > 0 {
+		if evalScore < 0 {
+			fmt.Fprintf(os.Stderr, "promptsmith: --min-score set but no score could be parsed\n")
+			os.Exit(1)
+		}
+		if evalScore < minScore {
+			fmt.Fprintf(os.Stderr, "promptsmith: score %d is below --min-score %d\n", evalScore, minScore)
+			os.Exit(2)
+		}
 	}
 }

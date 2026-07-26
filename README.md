@@ -206,11 +206,13 @@ reply "ok, I won't ask you questions".
 ## Scoring a prompt
 
 ```bash
-promptsmith -f prompt.md --eval          # human-readable report
-promptsmith -f prompt.md --eval --json   # raw JSON, for scripting
+promptsmith -f prompt.md --eval                    # human-readable report
+promptsmith -f prompt.md --eval --json             # raw JSON, for scripting
+promptsmith -f prompt.md --eval --min-score 70     # CI gate: exit 2 if below
 ```
 
-Scores the prompt 0-100 on five design dimensions and proposes concrete repairs:
+Scores the prompt 0-100 on five design dimensions, proposes concrete repairs,
+**and recommends which prompt-engineering techniques to apply**:
 
 ```
 ## Score: 16/100
@@ -220,7 +222,32 @@ Scores the prompt 0-100 on five design dimensions and proposes concrete repairs:
   Structural Executability     ███░░░░░░░░░░░░░░░░░  18
   Ambiguity Control            ██░░░░░░░░░░░░░░░░░░  10
   Robustness                   ░░░░░░░░░░░░░░░░░░░░   4
+
+## Recommended techniques
+
+- **rag** (HIGH)
+    why: the prompt asks for a buy/sell verdict but names no data source or
+         as-of date, so the model will invent figures.
+    how: require retrieval of filings/quotes as of a stated date, cite each
+         number with its source, and refuse a verdict if data is unavailable.
+
+- **meta-prompting** (HIGH)
+    why: "how is it doing" defines no evaluation dimensions or output shape.
+    how: add a fixed output contract — thesis, fundamentals, valuation, risks,
+         scenarios, information gaps, conditional verdict.
+
+Apply them:  promptsmith -T rag,meta-prompting -f <prompt-file>
+
+## Techniques considered and rejected
+- few-shot — the gap is missing inputs and evidence, not output style.
+- chain-of-thought — naming the dimensions beats asking for visible reasoning.
 ```
+
+Recommendations are constrained to the 17 techniques in the catalog (the same
+names `-T` accepts), so the report ends with a copy-pasteable command that
+actually applies them. The rejected list is deliberate: showing what was
+*considered and dismissed*, with reasons, is what makes the advice accountable
+rather than a black-box verdict.
 
 The `--json` form includes a `patchPlan` where each `oldText` is an exact
 substring of the input, so edits can be applied programmatically:
@@ -232,11 +259,29 @@ substring of the input, so edits can be applied programmatically:
   "patchPlan": [
     { "op": "replace", "oldText": "<exact fragment>", "newText": "…", "instruction": "issue + fix" }
   ],
+  "techniqueRecommendations": [
+    { "technique": "rag", "priority": "high", "why": "…", "how": "…" }
+  ],
+  "techniquesRejected": [
+    { "technique": "few-shot", "reason": "…" }
+  ],
   "summary": "One-sentence verdict"
 }
 ```
 
 `--eval` clamps temperature to ≤0.1 so scores are as stable as the model allows.
+
+### CI gating
+
+`--min-score N` turns `--eval` into a check you can put in a pipeline:
+
+```bash
+promptsmith -f prompts/*.md --eval --min-score 70
+```
+
+Exit codes: `0` = at or above the bar, `2` = scored below it (the report still
+prints), `1` = the tool itself failed (network, unparseable response). The
+distinct exit 2 lets CI tell "prompt needs work" apart from "the check broke".
 
 ## A/B comparing two prompts
 
