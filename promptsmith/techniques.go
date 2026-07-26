@@ -81,6 +81,18 @@ var techniques = []technique{
 		"Inputs are graphs/relations — nodes, edges, structured entity links."},
 }
 
+// techniqueCatalog renders the whole catalog as a compact menu the evaluator
+// can pick from. Keeping it inline (rather than embedding all 17 full guides)
+// keeps the eval call cheap while still constraining recommendations to real,
+// named techniques instead of invented ones.
+func techniqueCatalog() string {
+	var sb strings.Builder
+	for _, t := range techniques {
+		fmt.Fprintf(&sb, "- %s — %s Use when: %s\n", t.Name, t.Summary, t.UseWhen)
+	}
+	return sb.String()
+}
+
 func findTechnique(q string) (technique, bool) {
 	q = strings.ToLower(strings.TrimSpace(q))
 	for _, t := range techniques {
