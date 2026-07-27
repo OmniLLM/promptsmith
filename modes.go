@@ -289,28 +289,31 @@ func resolveModeStyle(modeSpec, styleSpec string) (mode, style) {
 }
 
 func printModes() {
-	fmt.Println("promptsmith modes and styles")
+	fmt.Println(bold("promptsmith modes and styles"))
 	fmt.Println()
 	for _, m := range modes {
 		def := ""
 		if m.Name == "system" {
-			def = "  [default]"
+			def = dim(" [default]")
 		}
-		fmt.Printf("  --mode %s%s  (%s)\n", m.Name, def, strings.Join(m.Aliases, ", "))
-		fmt.Printf("      %s\n", m.Summary)
+		fmt.Printf("%s%s  %s\n", bold("--mode "+m.Name), def, dim("("+strings.Join(m.Aliases, ", ")+")"))
+		fmt.Println(dim("  " + m.Summary))
+		headers := []string{"Style", "What it produces"}
+		var rows [][]string
 		for i, s := range m.Styles {
-			mark := ""
+			name := s.Name
 			if i == 0 {
-				mark = "  [default]"
+				name += " *"
 			}
-			fmt.Printf("        --style %s%s\n", s.Name, mark)
-			fmt.Printf("            %s\n", s.Summary)
+			rows = append(rows, []string{name, s.Summary})
 		}
+		fmt.Println(renderTable(headers, rows))
 		fmt.Println()
 	}
-	fmt.Println("Examples:")
-	fmt.Println("  promptsmith --mode system --style analytical \"you are a code reviewer\"")
-	fmt.Println("  promptsmith --mode user --style planning \"help me launch a newsletter\"")
+	fmt.Println(dim("* = default style") + "\n")
+	fmt.Println(bold("Examples:"))
+	fmt.Println("  pps --mode system --style analytical \"you are a code reviewer\"")
+	fmt.Println("  pps --mode user --style planning \"help me launch a newsletter\"")
 }
 
 // ---- iterate ----

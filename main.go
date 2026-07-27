@@ -522,9 +522,32 @@ func listModels(cfg config, base, key string) {
 	if err := json.Unmarshal(body, &ml); err != nil {
 		fail("unexpected /models response: %s", truncate(string(body), 300))
 	}
-	for _, m := range ml.Data {
-		fmt.Println(m.ID)
+	ids := make([]string, len(ml.Data))
+	for i, m := range ml.Data {
+		ids[i] = m.ID
 	}
+	printModelList(ids, cfg.Provider)
+}
+
+// printModelList renders a model catalog as a simple table (TTY) or one id per
+// line (piped), so `pps --list-models | grep ...` still works cleanly.
+func printModelList(ids []string, provider string) {
+	if !colorEnabled {
+		for _, id := range ids {
+			fmt.Println(id)
+		}
+		return
+	}
+	label := provider
+	if label == "" {
+		label = "models"
+	}
+	fmt.Println(bold(label+" models") + dim("  ("+fmt.Sprint(len(ids))+" available)"))
+	rows := make([][]string, len(ids))
+	for i, id := range ids {
+		rows[i] = []string{id}
+	}
+	fmt.Println(renderTable([]string{"Model ID"}, rows))
 }
 
 // complete sends a system+user pair to the configured provider and returns the
@@ -885,7 +908,14 @@ func main() {
 		out = "## Original prompt\n```text\n" +
 			strings.TrimRight(promptText, "\n") + "\n```\n\n" + out
 	}
-	fmt.Println(out)
+	// The file we write out and anything piped downstream stays raw Markdown;
+	// only the interactive terminal gets the styled render. Raw/JSON structured
+	// modes are already machine-shaped, so leave them untouched.
+	display := out
+	if !raw && !jsonFlag && !renderFlag {
+		display = renderMarkdown(out)
+	}
+	fmt.Println(display)
 	if outFile != "" {
 		if err := os.WriteFile(outFile, []byte(out+"\n"), 0o644); err != nil {
 			fail("cannot write %s — %v", outFile, err)

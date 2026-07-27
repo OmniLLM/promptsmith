@@ -369,9 +369,11 @@ func listCopilotModels() {
 	if err := json.Unmarshal(body, &ml); err != nil {
 		fail("unexpected /models response: %s", truncate(string(body), 300))
 	}
-	for _, m := range ml.Data {
-		fmt.Println(m.ID)
+	ids := make([]string, len(ml.Data))
+	for i, m := range ml.Data {
+		ids[i] = m.ID
 	}
+	printModelList(ids, "github-copilot")
 }
 
 // copilotStatus reports the cached credential state without making a chat call.

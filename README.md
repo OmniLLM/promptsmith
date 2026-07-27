@@ -59,6 +59,13 @@ Default output is structured:
 
 Use `--raw` to get only the rewritten prompt (great for piping/scripting).
 
+On an interactive terminal the structured output is rendered with color, section
+rules, and aligned tables (`--list-techniques`, `--list-modes`, `--list-models`
+and any Markdown tables the optimizer emits). When stdout is piped, redirected,
+or `NO_COLOR` is set, output degrades to plain Markdown / ASCII tables so
+scripting and file writes (`-o`) stay clean. The polished-prompt block is always
+emitted flush-left and unstyled, so selecting it copies the prompt verbatim.
+
 ## Techniques
 
 By default promptsmith picks the technique(s) itself by diagnosing your prompt.
@@ -566,6 +573,7 @@ pps/
   modes.go              optimization modes/styles, iterate + eval templates
   compare.go            A/B compare, templatize, local variable render
   copilot.go            GitHub Copilot OAuth device flow + token refresh
+  render.go             TTY-aware ANSI styling, tables, Markdown-to-terminal
   techniques/           the 17 reference guides (embedded at build time)
   go.mod
   install.sh            installer (go build + config scaffold)

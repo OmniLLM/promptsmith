@@ -126,19 +126,22 @@ func techniqueNames() string {
 
 // printTechniques lists the catalog for --list-techniques.
 func printTechniques() {
-	fmt.Println("promptsmith techniques (source: https://www.promptingguide.ai/techniques)")
+	fmt.Println(bold("promptsmith techniques") + dim("  (source: https://www.promptingguide.ai/techniques)"))
 	fmt.Println()
+	headers := []string{"Technique", "Aliases", "Summary", "Use when"}
+	var rows [][]string
 	for _, t := range techniques {
-		alias := ""
-		if len(t.Aliases) > 0 {
-			alias = "  (" + strings.Join(t.Aliases, ", ") + ")"
-		}
-		fmt.Printf("  %s%s\n", t.Name, alias)
-		fmt.Printf("      %s\n", t.Summary)
-		fmt.Printf("      use when: %s\n\n", t.UseWhen)
+		rows = append(rows, []string{
+			t.Name,
+			strings.Join(t.Aliases, ", "),
+			t.Summary,
+			t.UseWhen,
+		})
 	}
-	fmt.Println("Pin one or more with:  promptsmith -T cot,few-shot \"your prompt\"")
-	fmt.Println("Read a full guide with: promptsmith --show-technique react")
+	fmt.Println(renderTable(headers, rows))
+	fmt.Println()
+	fmt.Println(dim("Pin one or more with:  ") + "pps -T cot,few-shot \"your prompt\"")
+	fmt.Println(dim("Read a full guide with: ") + "pps --show-technique react")
 }
 
 // showTechnique prints the full reference guide for one technique.
