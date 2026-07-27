@@ -269,14 +269,17 @@ func copilotHeaders(token string) map[string]string {
 // (GPT-5-class) are responses-only and reject /chat/completions with
 // unsupported_api_for_model — transparently fall back to /responses.
 func polishCopilot(model, system, user string, temp float64) string {
+	return chatCopilot(model, temp, system, []chatMsg{{Role: "user", Content: user}})
+}
+
+// chatCopilot sends a full conversation to Copilot's chat-completions endpoint,
+// falling back to /responses for responses-only models.
+func chatCopilot(model string, temp float64, system string, history []chatMsg) string {
 	token, host := copilotSession()
 	url := host + "/chat/completions"
 	payload := map[string]any{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "system", "content": system},
-			{"role": "user", "content": user},
-		},
+		"model":       model,
+		"messages":    oaMessages(system, history),
 		"temperature": temp,
 	}
 	body, status, raw := tryPOST(url, copilotHeaders(token), payload)
@@ -284,10 +287,26 @@ func polishCopilot(model, system, user string, temp float64) string {
 		return parseChatCompletions(body, url)
 	}
 	if isUnsupportedChatCompletions(status, raw) {
-		return copilotResponses(token, host, model, system, user)
+		// Responses fallback only carries the latest user turn's text; flatten
+		// the conversation into one instruction+message pair.
+		return copilotResponses(token, host, model, system, flattenHistory(history))
 	}
 	fail("HTTP %d from %s — %s", status, url, truncate(raw, 500))
 	return ""
+}
+
+// flattenHistory renders a conversation as plain text for endpoints that take a
+// single user message rather than a turn list.
+func flattenHistory(history []chatMsg) string {
+	var sb strings.Builder
+	for _, m := range history {
+		label := "User"
+		if m.Role == "assistant" {
+			label = "Assistant"
+		}
+		sb.WriteString(label + ": " + m.Content + "\n\n")
+	}
+	return strings.TrimSpace(sb.String())
 }
 
 // isUnsupportedChatCompletions detects Copilot's responses-only model rejection.

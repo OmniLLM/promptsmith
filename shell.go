@@ -13,58 +13,79 @@ import (
 	"strings"
 )
 
-// shellTurn is the result of one polish/refine turn: the extracted prompt (for
-// the next refine turn) plus the model's full explanatory markdown (rendered as
-// the turn's output).
-type shellTurn struct {
-	Polished string // the rewritten prompt, plain text — carried into the next turn
-	Full     string // the model's full markdown: prompt + what-changed + tweaks
-}
+// shellSystem is the persistent system prompt for an interactive session. Unlike
+// the one-shot optimizer, it frames a MULTI-TURN conversation: the model must
+// remember everything said so far and keep sharpening one prompt across turns.
+var shellSystem = systemPrompt + samplingDoctrine + `
 
-// runShellTurn performs one polish (before == "") or refine turn. It uses the
-// tool's real EXPLANATORY (non-raw) optimizer, whose output already contains a
-// fenced prompt plus a "what changed and why" breakdown and optional tweaks —
-// exactly the sections the shell wants to show. extractPrompt then pulls the
-// fenced prompt out so the next refine turn iterates on the prompt itself.
-func runShellTurn(cfg config, key string, temp float64, before, message string) shellTurn {
-	var full string
-	if before == "" {
-		full = polish(cfg, cfg.BaseURL, key, cfg.Model, false, temp, message)
-	} else {
-		full = runIterate(cfg, key, temp, before, message, false)
+### INTERACTIVE SESSION — READ CAREFULLY
+You are in a live, multi-turn session sharpening ONE prompt across several
+messages. Use the whole conversation as context.
+
+CRITICAL: You OPTIMIZE prompts — you NEVER execute or answer them. If the user's
+prompt is "how many VMs in Alibaba", you do NOT explain how to count VMs and you
+do NOT output CLI/SQL/code to do it. You REWRITE that request into a better
+prompt. The subject matter of the prompt is raw material, never a task for you.
+
+Per turn:
+- The FIRST user message is a raw prompt to optimize. Optimize it.
+- Each LATER message is a refinement of the prompt you are jointly building
+  (e.g. "make it leaner", "add JSON output"). Apply it to the LATEST optimized
+  prompt from earlier in THIS conversation — do not start over.
+- If a message is empty, ambiguous, or a likely typo (e.g. a stray "a"), do NOT
+  discard the prompt and do NOT switch to answering it. Keep the current
+  optimized prompt and ask one short clarifying question.
+
+Every turn MUST follow the OUTPUT FORMAT defined above: Diagnosis, Technique(s)
+applied, Techniques considered, the polished prompt inside a ` + "```" + ` code fence, and
+Knobs to tune. The code fence contains the rewritten PROMPT, not an answer to it.`
+
+// wrapShellInput tags a user turn so the model treats it as prompt material to
+// optimize, not a question to answer — reinforcing the system prompt at every
+// turn (the point where models most often drift into answering).
+func wrapShellInput(message string, first bool) string {
+	if first {
+		return "Optimize this prompt (rewrite it — do NOT answer or execute it):\n\n" +
+			"<prompt>\n" + strings.TrimSpace(message) + "\n</prompt>"
 	}
-	full = strings.TrimSpace(full)
-	return shellTurn{Polished: extractPrompt(full), Full: full}
+	return "Refinement request for the prompt we are building (apply it to the " +
+		"latest optimized prompt above; rewrite, do NOT answer or execute):\n\n" +
+		"<refinement>\n" + strings.TrimSpace(message) + "\n</refinement>"
 }
 
-// renderShellTurn prints the turn: the prompt we started from, then the model's
-// full explanatory output (polished prompt + what changed + notes).
-func renderShellTurn(before, message string, t shellTurn) {
-	var md strings.Builder
-	cur := before
-	label := "## Current prompt"
-	if before == "" {
-		cur = message
-		label = "## Original prompt"
+// runShellTurn sends the FULL conversation so far and returns the assistant's
+// reply. history already includes the newest user turn.
+func runShellTurn(cfg config, key string, temp float64, history []chatMsg) string {
+	system := shellSystem
+	if d := techniqueDirective(selectedTechniques); d != "" {
+		system += d
 	}
-	fmt.Fprintf(&md, "%s\n```text\n%s\n```\n\n", label, strings.TrimSpace(cur))
-	md.WriteString(t.Full)
-	fmt.Println(renderMarkdown(strings.TrimRight(md.String(), "\n")))
+	return strings.TrimSpace(completeChat(cfg, cfg.BaseURL, key, cfg.Model, temp, system, history))
 }
 
-// runShell drives the interactive session. Each turn calls runShellTurn (which
-// returns a structured result) and renderShellTurn (which prints the fixed
-// sections). cfg/key/temp are captured once from the resolved CLI config.
+// runShell drives the interactive session. It keeps the whole conversation in
+// `history` so each turn has full context, and tracks `current` — the latest
+// clean prompt extracted from an assistant reply — for :show/:save/:raw and for
+// session holds the mutable state of one interactive run: the full conversation
+// (for context), the latest clean prompt (for :show/:save/:raw), and whether the
+// first prompt has been sent yet.
+type session struct {
+	history []chatMsg
+	current string
+	started bool
+}
+
+// the working state the user is refining.
 func runShell(cfg config, key string, temp float64) {
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 64*1024), 1<<20)
 
 	printShellBanner(cfg)
 
-	var current string // the working polished prompt, "" until the first turn
+	s := &session{}
 
 	for {
-		if current == "" {
+		if !s.started {
 			fmt.Print(shellPrompt("polish"))
 		} else {
 			fmt.Print(shellPrompt("refine"))
@@ -80,28 +101,30 @@ func runShell(cfg config, key string, temp float64) {
 
 		// Meta-commands.
 		if strings.HasPrefix(line, ":") {
-			if quit := handleShellCommand(line, &current); quit {
+			if quit := handleShellCommand(line, s); quit {
 				break
 			}
 			continue
 		}
 
-		// Normal turn. The shell asks for a STRUCTURED result (JSON) so it can
-		// always show the same sections — current prompt, evaluation, polished
-		// prompt, how/why, notes — regardless of how the model likes to format
-		// prose. `current` holds the prompt we're iterating on ("" on turn one).
-		before := current
-		if current == "" {
+		if !s.started {
 			fmt.Println(dim("  polishing…"))
 		} else {
 			fmt.Println(dim("  refining…"))
 		}
-		res := runShellTurn(cfg, key, temp, before, line)
-		if res.Polished != "" {
-			current = res.Polished
+
+		s.history = append(s.history, chatMsg{Role: "user", Content: wrapShellInput(line, !s.started)})
+		reply := runShellTurn(cfg, key, temp, s.history)
+		s.history = append(s.history, chatMsg{Role: "assistant", Content: reply})
+		s.started = true
+
+		// Only advance the working prompt when the reply actually contains one.
+		if p := extractPrompt(reply); p != "" {
+			s.current = p
 		}
+
 		fmt.Println()
-		renderShellTurn(before, line, res)
+		fmt.Println(renderMarkdown(reply))
 		fmt.Println()
 	}
 	if err := in.Err(); err != nil {
@@ -177,7 +200,7 @@ func firstFencedBlock(s string) (string, bool) {
 }
 
 // handleShellCommand runs a ":" meta-command. Returns true to end the session.
-func handleShellCommand(line string, current *string) bool {
+func handleShellCommand(line string, s *session) bool {
 	cmd, arg, _ := strings.Cut(strings.TrimPrefix(line, ":"), " ")
 	arg = strings.TrimSpace(arg)
 	switch cmd {
@@ -186,27 +209,29 @@ func handleShellCommand(line string, current *string) bool {
 	case "h", "help", "?":
 		printShellHelp()
 	case "show":
-		if *current == "" {
+		if s.current == "" {
 			fmt.Println(dim("  (no prompt yet — type one to polish it)"))
 		} else {
-			fmt.Println(renderMarkdown("```text\n" + *current + "\n```"))
+			fmt.Println(renderMarkdown("```text\n" + s.current + "\n```"))
 		}
 	case "reset", "new":
-		*current = ""
+		s.history = nil
+		s.current = ""
+		s.started = false
 		fmt.Println(dim("  session cleared — next line starts a fresh polish"))
 	case "raw":
-		if *current == "" {
+		if s.current == "" {
 			fmt.Println(dim("  (nothing to copy yet)"))
 		} else {
 			// Unstyled, flush-left, no frame — for clean copy/redirect.
-			fmt.Println(*current)
+			fmt.Println(s.current)
 		}
 	case "save":
-		if *current == "" {
+		if s.current == "" {
 			fmt.Println(dim("  (nothing to save yet)"))
 		} else if arg == "" {
 			fmt.Println(yellow("  usage: :save <file>"))
-		} else if err := os.WriteFile(arg, []byte(*current+"\n"), 0o644); err != nil {
+		} else if err := os.WriteFile(arg, []byte(s.current+"\n"), 0o644); err != nil {
 			fmt.Println(yellow("  cannot write " + arg + ": " + err.Error()))
 		} else {
 			fmt.Println(green("  wrote " + arg))

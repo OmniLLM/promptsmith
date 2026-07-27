@@ -569,6 +569,147 @@ func complete(cfg config, base, key, model string, temp float64, system, user st
 	}
 }
 
+// chatMsg is one turn in a multi-turn conversation. Role is "user" or
+// "assistant"; the system prompt is passed separately.
+type chatMsg struct {
+	Role    string
+	Content string
+}
+
+// completeChat sends a full conversation (system + prior turns) so the model has
+// the whole session as context, and returns the assistant's reply. Used by the
+// interactive shell so refinements build on everything said so far, not just the
+// latest prompt. For chat-completions shapes (openai-compatible, azure, copilot)
+// the history maps directly; anthropic-messages and openai-responses also carry
+// the full turn list.
+func completeChat(cfg config, base, key, model string, temp float64, system string, history []chatMsg) string {
+	switch cfg.Provider {
+	case "azure-foundry":
+		return chatAzure(cfg, key, temp, system, history)
+	case "github-copilot", "copilot":
+		return chatCopilot(model, temp, system, history)
+	}
+	switch cfg.APIShape {
+	case "anthropic-messages":
+		return chatAnthropic(base, key, model, system, history)
+	case "openai-responses":
+		return chatResponses(base, key, model, system, history)
+	default: // openai-compatible
+		return chatOpenAI(normalizeEndpoint(base)+"/chat/completions",
+			map[string]string{"authorization": "Bearer " + key}, model, temp, system, history)
+	}
+}
+
+// oaMessages builds the OpenAI-style messages array: a leading system message
+// followed by the conversation turns.
+func oaMessages(system string, history []chatMsg) []map[string]string {
+	msgs := make([]map[string]string, 0, len(history)+1)
+	if system != "" {
+		msgs = append(msgs, map[string]string{"role": "system", "content": system})
+	}
+	for _, m := range history {
+		msgs = append(msgs, map[string]string{"role": m.Role, "content": m.Content})
+	}
+	return msgs
+}
+
+func chatOpenAI(url string, headers map[string]string, model string, temp float64, system string, history []chatMsg) string {
+	payload := map[string]any{
+		"model":       model,
+		"messages":    oaMessages(system, history),
+		"temperature": temp,
+	}
+	body := doPOST(url, headers, payload)
+	return parseChatCompletions(body, url)
+}
+
+func chatAzure(cfg config, key string, temp float64, system string, history []chatMsg) string {
+	deployment := resolveDeployment(cfg)
+	apiVersion := cfg.AzureAPIVersion
+	if apiVersion == "" {
+		apiVersion = "2024-02-01"
+	}
+	base := strings.TrimRight(cfg.BaseURL, "/")
+	url := fmt.Sprintf("%s/openai/v1/chat/completions?api-version=%s", base, apiVersion)
+	payload := map[string]any{
+		"model":       deployment,
+		"messages":    oaMessages(system, history),
+		"temperature": temp,
+		"store":       false,
+	}
+	body := doPOST(url, map[string]string{"api-key": key}, payload)
+	return parseChatCompletions(body, url)
+}
+
+func chatAnthropic(base, key, model, system string, history []chatMsg) string {
+	url := normalizeEndpoint(base) + "/messages"
+	msgs := make([]map[string]string, 0, len(history))
+	for _, m := range history {
+		msgs = append(msgs, map[string]string{"role": m.Role, "content": m.Content})
+	}
+	payload := map[string]any{
+		"model":      model,
+		"system":     system,
+		"messages":   msgs,
+		"max_tokens": 4096,
+	}
+	headers := map[string]string{"x-api-key": key, "anthropic-version": "2023-06-01"}
+	body := doPOST(url, headers, payload)
+	var b struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(body, &b); err != nil {
+		fail("unexpected anthropic response: %s", truncate(string(body), 500))
+	}
+	var sb strings.Builder
+	for _, blk := range b.Content {
+		if blk.Type == "text" {
+			sb.WriteString(blk.Text)
+		}
+	}
+	return sb.String()
+}
+
+func chatResponses(base, key, model, system string, history []chatMsg) string {
+	url := normalizeEndpoint(base) + "/responses"
+	input := make([]map[string]string, 0, len(history))
+	for _, m := range history {
+		input = append(input, map[string]string{"role": m.Role, "content": m.Content})
+	}
+	payload := map[string]any{
+		"model":        model,
+		"instructions": system,
+		"input":        input,
+	}
+	body := doPOST(url, map[string]string{"authorization": "Bearer " + key}, payload)
+	var b struct {
+		OutputText string `json:"output_text"`
+		Output     []struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(body, &b); err != nil {
+		fail("unexpected responses payload: %s", truncate(string(body), 500))
+	}
+	if b.OutputText != "" {
+		return b.OutputText
+	}
+	for _, item := range b.Output {
+		for _, blk := range item.Content {
+			if blk.Text != "" {
+				return blk.Text
+			}
+		}
+	}
+	fail("empty responses payload: %s", truncate(string(body), 500))
+	return ""
+}
+
 // composeSystem builds the full system prompt for an optimization run from the
 // base doctrine plus the active mode/style/target/technique directives. Shared
 // by polish() and --show-system so what you inspect is what actually ships.
