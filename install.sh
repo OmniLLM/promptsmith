@@ -13,8 +13,8 @@ command -v go >/dev/null 2>&1 || { echo "error: Go toolchain not found. Install 
 mkdir -p "$BIN_DIR" "$CFG_DIR"
 
 echo "building promptsmith..."
-( cd "$HERE" && go build -o "$BIN_DIR/promptsmith" . )
-echo "installed $BIN_DIR/promptsmith"
+( cd "$HERE" && go build -o "$BIN_DIR/pps" . )
+echo "installed $BIN_DIR/pps"
 
 # Scaffold config if missing
 if [[ ! -f "$CFG_FILE" ]]; then
@@ -36,4 +36,4 @@ case ":$PATH:" in
   *) echo "NOTE: $BIN_DIR is not on your PATH. Add: export PATH=\"$BIN_DIR:\$PATH\"" ;;
 esac
 
-echo "done. Try: promptsmith --raw \"write a tweet about cats\""
+echo "done. Try: pps --raw \"write a tweet about cats\""

@@ -17,15 +17,15 @@ openai-responses) plus Azure AI Foundry. Defaults to a local
 
 ```bash
 git clone https://github.com/OmniLLM/promptsmith.git
-cd promptsmith/promptsmith
+cd promptsmith
 ./install.sh          # builds the Go binary into ~/.local/bin + scaffolds config
 ```
 
 Or build manually:
 
 ```bash
-cd promptsmith/promptsmith
-go build -o promptsmith .
+cd promptsmith
+go build -o pps .
 ```
 
 Written in Go — no runtime dependencies, single static binary. Requires Go >= 1.21 to build.
@@ -33,18 +33,18 @@ Written in Go — no runtime dependencies, single static binary. Requires Go >= 
 ## Usage
 
 ```bash
-promptsmith "write a tweet about cats"
-echo "summarize this article" | promptsmith
-promptsmith -m claude-opus-4.8 "classify sentiment of reviews"
-promptsmith --raw "just give me the rewritten prompt"   # polished prompt only, no explanation
-promptsmith --list-models                                # list available models
+pps "write a tweet about cats"
+echo "summarize this article" | pps
+pps -m claude-opus-4.8 "classify sentiment of reviews"
+pps --raw "just give me the rewritten prompt"   # polished prompt only, no explanation
+pps --list-models                                # list available models
 ```
 
 Read from and write to files:
 
 ```bash
-promptsmith -f prompt.md                       # optimize a prompt stored in a file
-promptsmith -f prompt.md --raw -o prompt.v2.md # write the result out (also printed to stdout)
+pps -f prompt.md                       # optimize a prompt stored in a file
+pps -f prompt.md --raw -o prompt.v2.md # write the result out (also printed to stdout)
 ```
 
 Default output is structured:
@@ -65,10 +65,10 @@ By default promptsmith picks the technique(s) itself by diagnosing your prompt.
 You can also browse the catalog and pin specific ones.
 
 ```bash
-promptsmith --list-techniques            # all 17 techniques + when to use each
-promptsmith --show-technique react       # full reference guide for one technique
-promptsmith -T cot "solve this puzzle"   # force chain-of-thought
-promptsmith -T few-shot,cot "classify"   # stack several
+pps --list-techniques            # all 17 techniques + when to use each
+pps --show-technique react       # full reference guide for one technique
+pps -T cot "solve this puzzle"   # force chain-of-thought
+pps -T few-shot,cot "classify"   # stack several
 ```
 
 `-T` / `--technique` takes a comma-separated list. Each name accepts short
@@ -105,11 +105,11 @@ works with no network and no repo checkout.
 
 Optimizing a **system prompt** (a persistent role definition) is a different job
 from optimizing a **user prompt** (a single request). promptsmith splits them,
-with three styles each. Run `promptsmith --list-modes` to see them.
+with three styles each. Run `pps --list-modes` to see them.
 
 ```bash
-promptsmith --mode system --style analytical "you are a code reviewer"
-promptsmith --mode user   --style planning   "help me launch a newsletter"
+pps --mode system --style analytical "you are a code reviewer"
+pps --mode user   --style planning   "help me launch a newsletter"
 ```
 
 | `--mode` | `--style` | What it produces |
@@ -132,8 +132,8 @@ Classic prompt-engineering advice was written for instruction-following models
 and **partially inverts for reasoning models**. promptsmith branches on this:
 
 ```bash
-promptsmith --target instruct  "solve seating-arrangement logic puzzles"
-promptsmith --target reasoning "solve seating-arrangement logic puzzles"
+pps --target instruct  "solve seating-arrangement logic puzzles"
+pps --target reasoning "solve seating-arrangement logic puzzles"
 ```
 
 | | instruction-following (GPT-4-class, Sonnet-class, local) | reasoning (o-series, GPT-5-class, extended thinking) |
@@ -190,8 +190,8 @@ Once you have a prompt you like, refine it against a specific change request
 instead of re-optimizing from scratch:
 
 ```bash
-promptsmith -f prompt.md --iterate "add a JSON output contract"
-promptsmith -f prompt.md --iterate "make it refuse out-of-scope questions" --raw -o prompt.v2.md
+pps -f prompt.md --iterate "add a JSON output contract"
+pps -f prompt.md --iterate "make it refuse out-of-scope questions" --raw -o prompt.v2.md
 ```
 
 This makes a surgical edit: it folds the request in as a new instruction or
@@ -206,9 +206,9 @@ reply "ok, I won't ask you questions".
 ## Scoring a prompt
 
 ```bash
-promptsmith -f prompt.md --eval                    # human-readable report
-promptsmith -f prompt.md --eval --json             # raw JSON, for scripting
-promptsmith -f prompt.md --eval --min-score 70     # CI gate: exit 2 if below
+pps -f prompt.md --eval                    # human-readable report
+pps -f prompt.md --eval --json             # raw JSON, for scripting
+pps -f prompt.md --eval --min-score 70     # CI gate: exit 2 if below
 ```
 
 Scores the prompt 0-100 on five design dimensions, proposes concrete repairs,
@@ -236,7 +236,7 @@ Scores the prompt 0-100 on five design dimensions, proposes concrete repairs,
     how: add a fixed output contract — thesis, fundamentals, valuation, risks,
          scenarios, information gaps, conditional verdict.
 
-Apply them:  promptsmith -T rag,meta-prompting -f <prompt-file>
+Apply them:  pps -T rag,meta-prompting -f <prompt-file>
 
 ## Techniques considered and rejected
 - few-shot — the gap is missing inputs and evidence, not output style.
@@ -276,7 +276,7 @@ substring of the input, so edits can be applied programmatically:
 `--min-score N` turns `--eval` into a check you can put in a pipeline:
 
 ```bash
-promptsmith -f prompts/*.md --eval --min-score 70
+pps -f prompts/*.md --eval --min-score 70
 ```
 
 Exit codes: `0` = at or above the bar, `2` = scored below it (the report still
@@ -290,9 +290,9 @@ prompts are executed against the same test input (concurrently), then a judge
 model scores the two outputs.
 
 ```bash
-promptsmith -f v2.md --compare v1.md --test "review this login function: ..."
-promptsmith -f v2.md --compare v1.md --test "..." --show-outputs   # also print both outputs
-promptsmith -f v2.md --compare v1.md --test "..." --json           # machine-readable verdict
+pps -f v2.md --compare v1.md --test "review this login function: ..."
+pps -f v2.md --compare v1.md --test "..." --show-outputs   # also print both outputs
+pps -f v2.md --compare v1.md --test "..." --json           # machine-readable verdict
 ```
 
 A is the `--compare` file (baseline), B is the main input (candidate).
@@ -326,8 +326,8 @@ say when the sample is too thin to tell. `recommendation` is one of `adopt`,
 uses and replaces them with `{{variables}}`:
 
 ```bash
-promptsmith -f prompt.md --templatize --vars-out vars.json
-promptsmith -f prompt.md --templatize --max-vars 3
+pps -f prompt.md --templatize --vars-out vars.json
+pps -f prompt.md --templatize --max-vars 3
 ```
 
 ```
@@ -351,9 +351,9 @@ reported as skipped instead of being applied blindly.
 Then fill the template back in — **locally, with no API call**:
 
 ```bash
-promptsmith -f tpl.md --render --var topic=Kubernetes --var tone=technical
-promptsmith -f tpl.md --render --vars vars.json
-promptsmith -f tpl.md --render --vars vars.json --strict   # exit 1 if any {{var}} is left
+pps -f tpl.md --render --var topic=Kubernetes --var tone=technical
+pps -f tpl.md --render --vars vars.json
+pps -f tpl.md --render --vars vars.json --strict   # exit 1 if any {{var}} is left
 ```
 
 `--render` is instant and free. `--var` overrides `--vars`. Without `--strict`,
@@ -365,17 +365,17 @@ prompt with its own `vars.json` reproduces the original text exactly.
 ### A full loop
 
 ```bash
-promptsmith --mode system --style analytical --raw "you are a code reviewer" -o v1.md
-promptsmith -f v1.md --eval
-promptsmith -f v1.md --iterate "require a severity label per finding" --raw -o v2.md
-promptsmith -f v2.md --eval                                    # score on paper
-promptsmith -f v2.md --compare v1.md --test "<a real case>"    # score in practice
-promptsmith -f v2.md --templatize --vars-out vars.json         # make it reusable
+pps --mode system --style analytical --raw "you are a code reviewer" -o v1.md
+pps -f v1.md --eval
+pps -f v1.md --iterate "require a severity label per finding" --raw -o v2.md
+pps -f v2.md --eval                                    # score on paper
+pps -f v2.md --compare v1.md --test "<a real case>"    # score in practice
+pps -f v2.md --templatize --vars-out vars.json         # make it reusable
 ```
 
 ## Configuring the LLM provider
 
-promptsmith supports the **same providers and wire shapes as
+pps supports the **same providers and wire shapes as
 [omni-agent-desktop](https://github.com/OmniLLM/omni-agent-desktop)**, so a
 config that works there works here. Two provider types, and the custom provider
 speaks one of three API shapes:
@@ -394,11 +394,11 @@ speaks one of three API shapes:
 Auth is the standard device flow, same as the VS Code Copilot extension:
 
 ```bash
-promptsmith --copilot-login     # open github.com/login/device, enter the code
-promptsmith --copilot-status    # who you are + token validity
-promptsmith -p github-copilot --list-models
-promptsmith -p github-copilot -m gpt-4.1 "review this SQL migration"
-promptsmith --copilot-logout    # delete cached credentials
+pps --copilot-login     # open github.com/login/device, enter the code
+pps --copilot-status    # who you are + token validity
+pps -p github-copilot --list-models
+pps -p github-copilot -m gpt-4.1 "review this SQL migration"
+pps --copilot-logout    # delete cached credentials
 ```
 
 How it works:
@@ -469,13 +469,13 @@ the key out of the config file and in `PROMPTSMITH_API_KEY` is recommended.
 
 **OmniLLM (default, local proxy)** — nothing to configure. promptsmith points at
 `http://localhost:5000/v1` (openai-compatible) and reads the key from
-`~/.config/omnillm/api-key` automatically. Just run `promptsmith "..."`.
+`~/.config/omnillm/api-key` automatically. Just run `pps "..."`.
 
 OmniLLM also speaks the Anthropic and Responses shapes for the right models:
 
 ```bash
-promptsmith -s anthropic-messages -m claude-opus-4.8 "polish this"
-promptsmith -s openai-responses   -m gpt-5.5          "polish this"
+pps -s anthropic-messages -m claude-opus-4.8 "polish this"
+pps -s openai-responses   -m gpt-5.5          "polish this"
 ```
 
 **OpenAI** (openai-compatible)
@@ -524,8 +524,8 @@ export PROMPTSMITH_API_KEY="<azure-key>"
 the key, but a non-empty placeholder is still required:
 
 ```bash
-promptsmith -u http://localhost:8000/v1  -m meta-llama/Llama-3.1-8B-Instruct -k EMPTY "..."
-promptsmith -u http://localhost:11434/v1 -m llama3.1 -k ollama "..."
+pps -u http://localhost:8000/v1  -m meta-llama/Llama-3.1-8B-Instruct -k EMPTY "..."
+pps -u http://localhost:11434/v1 -m llama3.1 -k ollama "..."
 ```
 
 ### One-off overrides
@@ -533,14 +533,14 @@ promptsmith -u http://localhost:11434/v1 -m llama3.1 -k ollama "..."
 Flags override everything for a single run without touching your config:
 
 ```bash
-promptsmith -p custom -s anthropic-messages -u https://api.anthropic.com \
+pps -p custom -s anthropic-messages -u https://api.anthropic.com \
   -m claude-3-5-sonnet-latest -k "$ANTHROPIC_API_KEY" "improve this"
 ```
 
 ### Verify your setup
 
 ```bash
-promptsmith --list-models     # confirms base URL + key reach the provider
+pps --list-models     # confirms base URL + key reach the provider
 ```
 
 Works for the `openai-compatible` shape and `azure-foundry` (both expose
@@ -560,7 +560,7 @@ ln -s "$PWD" ~/.hermes/skills/prompt-engineering
 ## Layout
 
 ```
-promptsmith/
+pps/
   main.go               single-file Go CLI (stdlib only)
   techniques.go         technique catalog + embedded reference guides
   modes.go              optimization modes/styles, iterate + eval templates
@@ -584,8 +584,8 @@ To see the *live* prompt the CLI actually sends (base doctrine plus the active
 mode/style/target/technique directives), run:
 
 ```bash
-promptsmith --show-system
-promptsmith --show-system --mode user --style planning --target reasoning -T cot
+pps --show-system
+pps --show-system --mode user --style planning --target reasoning -T cot
 ```
 
 ## Credits
