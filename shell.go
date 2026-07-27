@@ -51,11 +51,11 @@ func runShell(cfg config, key string, temp float64) {
 		if current == "" {
 			fmt.Println(dim("  polishing…"))
 			out := polish(cfg, cfg.BaseURL, key, cfg.Model, true, temp, line)
-			current = stripFence(strings.TrimSpace(out))
+			current = extractPrompt(out)
 		} else {
 			fmt.Println(dim("  refining…"))
 			out := runIterate(cfg, key, temp, current, line, true)
-			current = stripFence(strings.TrimSpace(out))
+			current = extractPrompt(out)
 		}
 		fmt.Println()
 		fmt.Println(renderMarkdown("## Current prompt\n```text\n" + current + "\n```"))
@@ -65,6 +65,72 @@ func runShell(cfg config, key string, temp float64) {
 		fmt.Fprintln(os.Stderr, "pps: input error:", err)
 	}
 	fmt.Println(dim("bye."))
+}
+
+// extractPrompt pulls just the clean prompt body out of a model response. Even
+// in --raw mode, models often wrap the prompt in a heading ("## Optimized
+// Prompt"), fence it, and append a "Notes on what I changed" explanation. We
+// keep only the prompt so the shell iterates on the prompt itself, not on the
+// model's commentary. Preference order:
+//  1. the contents of the first fenced code block, if any;
+//  2. otherwise, the text with a leading heading dropped and any trailing
+//     explanation section ("Notes…", "---", "If you tell me…") cut off.
+func extractPrompt(out string) string {
+	s := strings.TrimSpace(out)
+	if body, ok := firstFencedBlock(s); ok {
+		return strings.TrimSpace(body)
+	}
+	lines := strings.Split(s, "\n")
+
+	// Drop a leading markdown heading like "## Optimized Prompt" (and a blank
+	// line or "---" rule right after it).
+	for len(lines) > 0 {
+		t := strings.TrimSpace(lines[0])
+		if t == "" || t == "---" || t == "***" || strings.HasPrefix(t, "#") {
+			lines = lines[1:]
+			continue
+		}
+		break
+	}
+
+	// Cut everything from the first explanation marker onward.
+	for i, l := range lines {
+		t := strings.TrimSpace(l)
+		low := strings.ToLower(strings.Trim(t, "*_ "))
+		if t == "---" || t == "***" ||
+			strings.HasPrefix(low, "notes on what") ||
+			strings.HasPrefix(low, "notes:") ||
+			strings.HasPrefix(low, "what i changed") ||
+			strings.HasPrefix(low, "changes made") ||
+			strings.HasPrefix(low, "if you tell me") ||
+			strings.HasPrefix(low, "if you can tell me") ||
+			strings.HasPrefix(low, "let me know") {
+			lines = lines[:i]
+			break
+		}
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// firstFencedBlock returns the contents of the first ```-fenced block in s.
+func firstFencedBlock(s string) (string, bool) {
+	lines := strings.Split(s, "\n")
+	start := -1
+	for i, l := range lines {
+		if strings.HasPrefix(strings.TrimSpace(l), "```") {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return "", false
+	}
+	for j := start + 1; j < len(lines); j++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[j]), "```") {
+			return strings.Join(lines[start+1:j], "\n"), true
+		}
+	}
+	return "", false // unterminated fence; fall back to heuristic stripping
 }
 
 // handleShellCommand runs a ":" meta-command. Returns true to end the session.
