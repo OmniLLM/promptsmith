@@ -168,9 +168,9 @@ func resolveTechniques(spec string) []technique {
 		}
 		t, ok := findTechnique(part)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "promptsmith: unknown technique %q\n", part)
+			fmt.Fprintf(os.Stderr, "pps: unknown technique %q\n", part)
 			fmt.Fprintf(os.Stderr, "known techniques: %s\n", techniqueNames())
-			fmt.Fprintf(os.Stderr, "run `promptsmith --list-techniques` for descriptions\n")
+			fmt.Fprintf(os.Stderr, "run `pps --list-techniques` for descriptions\n")
 			os.Exit(1)
 		}
 		out = append(out, t)

@@ -33,12 +33,41 @@ Written in Go — no runtime dependencies, single static binary. Requires Go >= 
 ## Usage
 
 ```bash
+pps                                              # interactive polish shell (see below)
 pps "write a tweet about cats"
 echo "summarize this article" | pps
 pps -m claude-opus-4.8 "classify sentiment of reviews"
 pps --raw "just give me the rewritten prompt"   # polished prompt only, no explanation
 pps --list-models                                # list available models
 ```
+
+## Interactive shell
+
+Run `pps` with no prompt (or `pps --chat` / `pps -i`) on a terminal to open a
+conversational session. Type a prompt to polish it, then keep talking to refine
+that *same* prompt turn by turn — the first message is polished from scratch and
+every following message is applied as a change request to the current prompt.
+
+```
+promptsmith interactive shell  (custom · claude-opus-4.8)
+polish › classify sentiment of reviews
+refine › make it output JSON
+refine › add a confidence score
+refine › :save prompt.md
+```
+
+Meta-commands (anything starting with `:`):
+
+| Command | What it does |
+|---|---|
+| `:show` | print the current polished prompt (framed) |
+| `:raw` | print it unstyled/flush-left for clean copy or redirect |
+| `:save <file>` | write the current prompt to a file |
+| `:reset` | clear the session and start a fresh polish |
+| `:help` | list commands |
+| `:quit` | exit (Ctrl-D also works) |
+
+Piped or argument invocations stay one-shot, so scripts are unaffected.
 
 Read from and write to files:
 
@@ -573,6 +602,7 @@ pps/
   modes.go              optimization modes/styles, iterate + eval templates
   compare.go            A/B compare, templatize, local variable render
   copilot.go            GitHub Copilot OAuth device flow + token refresh
+  shell.go              interactive polish shell (conversational refine loop)
   render.go             TTY-aware ANSI styling, tables, Markdown-to-terminal
   techniques/           the 17 reference guides (embedded at build time)
   go.mod

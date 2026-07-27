@@ -149,7 +149,7 @@ func copilotLogin() {
 	if who == "" {
 		who = "your account"
 	}
-	fmt.Fprintf(os.Stderr, "promptsmith: authorized as %s — credentials saved to %s\n",
+	fmt.Fprintf(os.Stderr, "pps: authorized as %s — credentials saved to %s\n",
 		who, copilotCredsPath())
 }
 
@@ -175,7 +175,7 @@ func githubLogin(ghToken string) string {
 // and adopts the account-specific API host advertised by the exchange.
 func refreshCopilotToken(c copilotCreds) copilotCreds {
 	if c.GitHubToken == "" {
-		fail("not logged in to GitHub Copilot — run: promptsmith --copilot-login")
+		fail("not logged in to GitHub Copilot — run: pps --copilot-login")
 	}
 	req, _ := http.NewRequest("GET", ghAPIBaseURL+"/copilot_internal/v2/token", nil)
 	req.Header.Set("Authorization", "token "+c.GitHubToken)
@@ -193,7 +193,7 @@ func refreshCopilotToken(c copilotCreds) copilotCreds {
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
 		fail("copilot token exchange failed with HTTP %d — %s\n"+
-			"(does this account have an active Copilot seat? try: promptsmith --copilot-login)",
+			"(does this account have an active Copilot seat? try: pps --copilot-login)",
 			resp.StatusCode, truncate(string(body), 300))
 	}
 	var tr struct {
@@ -226,7 +226,7 @@ func copilotSession() (token, host string) {
 		if env := strings.TrimSpace(os.Getenv("PROMPTSMITH_GITHUB_TOKEN")); env != "" {
 			c.GitHubToken = env
 		} else {
-			fail("not logged in to GitHub Copilot — run: promptsmith --copilot-login")
+			fail("not logged in to GitHub Copilot — run: pps --copilot-login")
 		}
 	}
 	if c.CopilotToken == "" || c.ExpiresAt == 0 || time.Now().Unix() > c.ExpiresAt-300 {
@@ -380,7 +380,7 @@ func listCopilotModels() {
 func copilotStatus() {
 	c := loadCopilotCreds()
 	if c.GitHubToken == "" {
-		fmt.Println("github-copilot: not logged in (run: promptsmith --copilot-login)")
+		fmt.Println("github-copilot: not logged in (run: pps --copilot-login)")
 		return
 	}
 	who := c.Login
@@ -410,5 +410,5 @@ func copilotLogout() {
 	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 		fail("cannot remove %s — %v", p, err)
 	}
-	fmt.Fprintf(os.Stderr, "promptsmith: removed %s\n", p)
+	fmt.Fprintf(os.Stderr, "pps: removed %s\n", p)
 }

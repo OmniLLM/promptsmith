@@ -534,7 +534,7 @@ func renderEval(r evalReport) string {
 			}
 		}
 		if len(names) > 0 {
-			fmt.Fprintf(&sb, "\nApply them:  promptsmith -T %s -f <prompt-file>\n",
+			fmt.Fprintf(&sb, "\nApply them:  pps -T %s -f <prompt-file>\n",
 				strings.Join(names, ","))
 		}
 	}
@@ -584,7 +584,7 @@ func runEval(cfg config, key string, temp float64, prompt string, rawJSON bool) 
 	var r evalReport
 	if err := json.Unmarshal([]byte(clean), &r); err != nil {
 		// Don't lose the model's work just because the JSON was malformed.
-		fmt.Fprintf(os.Stderr, "promptsmith: could not parse eval JSON (%v), showing raw output\n", err)
+		fmt.Fprintf(os.Stderr, "pps: could not parse eval JSON (%v), showing raw output\n", err)
 		if rawJSON {
 			return clean, -1
 		}

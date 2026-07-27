@@ -45,9 +45,11 @@ func sgr(code, s string) string {
 	return code + s + ansiReset
 }
 
-func bold(s string) string  { return sgr(ansiBold, s) }
-func dim(s string) string   { return sgr(ansiDim, s) }
-func green(s string) string { return sgr(ansiGreen, s) }
+func bold(s string) string   { return sgr(ansiBold, s) }
+func dim(s string) string    { return sgr(ansiDim, s) }
+func green(s string) string  { return sgr(ansiGreen, s) }
+func cyan(s string) string   { return sgr(ansiCyan, s) }
+func yellow(s string) string { return sgr(ansiYellow, s) }
 
 // termWidth returns the usable column count, from $COLUMNS when available.
 func termWidth() int {

@@ -301,7 +301,7 @@ func pick(flagVal, env, cfgVal, def string) string {
 }
 
 func fail(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "promptsmith: "+format+"\n", a...)
+	fmt.Fprintf(os.Stderr, "pps: "+format+"\n", a...)
 	os.Exit(1)
 }
 
@@ -604,79 +604,74 @@ func truncate(s string, n int) string {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `promptsmith — optimize prompts using proven prompt-engineering techniques via an LLM.
+	fmt.Fprint(os.Stderr, `pps (promptsmith) — optimize prompts using proven prompt-engineering techniques via an LLM.
 
 Usage:
-  promptsmith [flags] "raw prompt to optimize"
-  echo "raw prompt" | promptsmith [flags]
+  pps                          start the interactive polish shell (bare invocation)
+  pps [flags] "raw prompt"     optimize a prompt one-shot
+  echo "raw prompt" | pps      optimize from stdin
+  pps --chat                   force the interactive shell
 
-Flags:
-  -m, --model string    Model / Azure logical model name (default gpt-5.5)
-  -u, --base-url string Endpoint / base URL (default http://localhost:5000/v1)
-  -k, --api-key string  API key (default: env or ~/.config/omnillm/api-key)
-  -p, --provider string Provider: custom | azure-foundry | github-copilot
-                        (default custom)
-  -s, --api-shape string  Custom provider wire shape:
-                          openai-compatible | anthropic-messages | openai-responses
-                          (default openai-compatible)
-  -t, --temperature f   Sampling temperature (default 0.3)
-  -T, --technique list  Force specific technique(s), comma-separated
-                        (e.g. -T cot  |  -T few-shot,chain-of-thought)
+Common flags:
+  -m, --model string     Model name (default gpt-5.5)
+  -t, --temperature f    Sampling temperature (default 0.3)
+  -T, --technique list   Force technique(s), comma-separated (e.g. -T cot | -T few-shot,cot)
+      --mode name        system (default) | user
+      --style name       system: general | analytical | output-format
+                         user:   basic | planning | professional
+      --target class     reasoning | instruct  (default: inferred from the prompt)
+  -f, --file path        Read the prompt from a file instead of args/stdin
+  -o, --out path         Write the result to a file (still printed to stdout)
+      --raw              Output only the polished prompt, no explanation
+  -i, --chat             Start the interactive polish shell
+  -h, --help             Show this help
 
-Optimization mode:
-      --mode name       system (default) | user
-      --style name      system: general | analytical | output-format
-                        user:   basic | planning | professional
-      --target reasoning|instruct
-                        Target model class. Reasoning models (o-series,
-                        GPT-5-class) want a goal + constraints and NO explicit
-                        chain-of-thought; instruct models want explicit steps
-                        and examples. Default: inferred from the prompt.
-      --list-modes      List modes and styles and exit
-
-Operations:
-  -f, --file path       Read the prompt from a file instead of args/stdin
-  -o, --out path        Write the result to a file (still printed to stdout)
-      --iterate req     Refine an existing prompt: -f old.md --iterate "add JSON output"
-      --eval            Score the prompt (0-100 across 5 dimensions) + patch plan
-      --json            With --eval, emit the raw JSON instead of a report
-      --min-score n     With --eval, exit 2 if the overall score is below n
-                        (for CI gating of prompt files)
-      --compare path    A/B test: -f new.md --compare old.md --test "a question"
-      --test input      Test input for --compare (required with --compare)
-      --show-outputs    With --compare, also print both raw outputs
-      --templatize      Extract {{variables}} to make the prompt reusable
-      --max-vars n      Max variables for --templatize (default 5)
-      --vars-out path   With --templatize, write the vars.json skeleton here
-      --render          Fill {{variables}} locally (no API call)
-      --var k=v         A variable for --render (repeatable)
-      --vars path       JSON file of variables for --render
-      --strict          With --render, fail if any placeholder is left unfilled
-
-      --raw             Output only the polished prompt, no explanation
-      --list-models     List available models and exit
-
-GitHub Copilot (OAuth device flow, uses your Copilot seat — no API key):
-      --copilot-login   Authorize via github.com/login/device and cache creds
-      --copilot-status  Show who you're logged in as and token validity
-      --copilot-logout  Delete the cached credentials
-                        Then: promptsmith -p github-copilot -m gpt-4.1 "..."
-                        Creds: ~/.config/promptsmith/copilot.json (0600)
-
-      --list-techniques List the 17 supported techniques and exit
-      --show-system     Print the composed system prompt (honours --mode,
-                        --style, --target, -T, --raw) and exit
+Discover:
+      --list-techniques  List the 17 supported techniques and exit
+      --list-modes       List modes and styles and exit
+      --list-models      List available models and exit
       --show-technique name  Print the full reference guide for one technique
-  -h, --help            Show this help
+      --show-system      Print the composed system prompt (honours --mode/--style/--target/-T/--raw)
+
+Connection:
+  -u, --base-url string  Endpoint / base URL (default http://localhost:5000/v1)
+  -k, --api-key string   API key (default: env or ~/.config/omnillm/api-key)
+  -p, --provider string  custom (default) | azure-foundry | github-copilot
+  -s, --api-shape string openai-compatible (default) | anthropic-messages | openai-responses
+
+GitHub Copilot (OAuth device flow — uses your Copilot seat, no API key):
+      --copilot-login    Authorize via github.com/login/device and cache creds
+      --copilot-status   Show who you're logged in as and token validity
+      --copilot-logout   Delete the cached credentials
+                         Then: pps -p github-copilot -m gpt-4.1 "..."
+
+Advanced operations:
+      --iterate req      Refine an existing prompt: -f old.md --iterate "add JSON output"
+      --eval             Score the prompt (0-100 across 5 dimensions) + patch plan
+      --json             With --eval, emit the raw JSON instead of a report
+      --min-score n      With --eval, exit 2 if the score is below n (CI gating)
+      --compare path     A/B test: -f new.md --compare old.md --test "a question"
+      --test input       Test input for --compare (required with --compare)
+      --show-outputs     With --compare, also print both raw outputs
+      --templatize       Extract {{variables}} to make the prompt reusable
+      --max-vars n       Max variables for --templatize (default 5)
+      --vars-out path    With --templatize, write the vars.json skeleton here
+      --render           Fill {{variables}} locally (no API call)
+      --var k=v          A variable for --render (repeatable)
+      --vars path        JSON file of variables for --render
+      --strict           With --render, fail if any placeholder is left unfilled
+
+Interactive shell:
+  Bare 'pps' (or 'pps --chat') on a terminal opens a session. Type a prompt to
+  polish it, then keep typing to refine that same prompt turn by turn. Commands:
+  :show  :raw  :save <file>  :reset  :help  :quit  (Ctrl-D also exits).
 
 Examples:
-  promptsmith --mode user --style planning "help me launch a newsletter"
-  promptsmith -f prompt.md --eval
-  promptsmith -f prompt.md --eval --min-score 70    # CI gate
-  promptsmith -f prompt.md --iterate "make the output JSON" -o prompt.v2.md
-  promptsmith -f v2.md --compare v1.md --test "review this login function"
-  promptsmith -f prompt.md --templatize --vars-out vars.json
-  promptsmith -f tpl.md --render --var topic=AI --var tone=formal
+  pps                                               # interactive session
+  pps --mode user --style planning "launch a newsletter"
+  pps -f prompt.md --eval --min-score 70            # CI gate
+  pps -f prompt.md --iterate "make the output JSON" -o prompt.v2.md
+  pps -f v2.md --compare v1.md --test "review this login function"
 
 Config file (~/.config/promptsmith/config.json) can set provider, api_shape,
 base_url, model, api_key, azure_api_version, azure_deployments.
@@ -743,6 +738,7 @@ func main() {
 		copilotLoginFlag, copilotLogoutFlag        bool
 		copilotStatusFlag                          bool
 		showSystemFlag                             bool
+		chatFlag                                   bool
 		varPairs                                   multiFlag
 	)
 	fs := flag.NewFlagSet("promptsmith", flag.ContinueOnError)
@@ -791,6 +787,8 @@ func main() {
 	fs.BoolVar(&copilotLogoutFlag, "copilot-logout", false, "remove cached Copilot credentials")
 	fs.BoolVar(&copilotStatusFlag, "copilot-status", false, "show Copilot login status")
 	fs.BoolVar(&showSystemFlag, "show-system", false, "print the composed system prompt")
+	fs.BoolVar(&chatFlag, "chat", false, "start the interactive polish shell")
+	fs.BoolVar(&chatFlag, "i", false, "start the interactive polish shell")
 	fs.BoolVar(&helpFlag, "h", false, "help")
 	fs.BoolVar(&helpFlag, "help", false, "help")
 
@@ -856,6 +854,26 @@ func main() {
 		return
 	}
 
+	// Decide the input source. The interactive shell kicks in when there's no
+	// prompt to run one-shot: either explicitly via --chat/-i, or implicitly
+	// when bare `pps` is invoked on an interactive terminal (no arg, no -f, no
+	// piped stdin). Piped or argument usage stays one-shot so scripts are
+	// unaffected.
+	stdinIsPipe := false
+	if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
+		stdinIsPipe = true
+	}
+	noInput := inFile == "" && len(fs.Args()) == 0 && !stdinIsPipe
+	if chatFlag || noInput {
+		if !stdoutIsTTY || stdinIsPipe {
+			// No usable terminal for an interactive loop; fall back to usage.
+			usage()
+			os.Exit(1)
+		}
+		runShell(cfg, apiKey, temperature)
+		return
+	}
+
 	var promptText string
 	if inFile != "" {
 		b, err := os.ReadFile(inFile)
@@ -865,12 +883,9 @@ func main() {
 		promptText = string(b)
 	} else if args := fs.Args(); len(args) > 0 {
 		promptText = strings.Join(args, " ")
-	} else if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
+	} else {
 		b, _ := io.ReadAll(os.Stdin)
 		promptText = string(b)
-	} else {
-		usage()
-		os.Exit(1)
 	}
 
 	if strings.TrimSpace(promptText) == "" {
@@ -920,18 +935,18 @@ func main() {
 		if err := os.WriteFile(outFile, []byte(out+"\n"), 0o644); err != nil {
 			fail("cannot write %s — %v", outFile, err)
 		}
-		fmt.Fprintf(os.Stderr, "promptsmith: wrote %s\n", outFile)
+		fmt.Fprintf(os.Stderr, "pps: wrote %s\n", outFile)
 	}
 	// CI gate: a score below the threshold is a non-zero exit so `--eval
 	// --min-score N` can fail a pipeline. Exit 2 distinguishes "ran fine,
 	// prompt is below bar" from exit 1 ("the tool itself failed").
 	if evalFlag && minScore > 0 {
 		if evalScore < 0 {
-			fmt.Fprintf(os.Stderr, "promptsmith: --min-score set but no score could be parsed\n")
+			fmt.Fprintf(os.Stderr, "pps: --min-score set but no score could be parsed\n")
 			os.Exit(1)
 		}
 		if evalScore < minScore {
-			fmt.Fprintf(os.Stderr, "promptsmith: score %d is below --min-score %d\n", evalScore, minScore)
+			fmt.Fprintf(os.Stderr, "pps: score %d is below --min-score %d\n", evalScore, minScore)
 			os.Exit(2)
 		}
 	}

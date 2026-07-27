@@ -112,7 +112,7 @@ func runCompare(cfg config, key string, temp float64, promptA, promptB, testInpu
 
 	var v judgeVerdict
 	if err := json.Unmarshal([]byte(clean), &v); err != nil {
-		fmt.Fprintf(os.Stderr, "promptsmith: could not parse judge JSON (%v), showing raw output\n", err)
+		fmt.Fprintf(os.Stderr, "pps: could not parse judge JSON (%v), showing raw output\n", err)
 		return raw
 	}
 	return renderCompare(v, outA, outB, showOutputs)
@@ -272,7 +272,7 @@ func runTemplatize(cfg config, key string, temp float64, prompt string, maxVars 
 
 	var ev extractedVars
 	if err := json.Unmarshal([]byte(clean), &ev); err != nil {
-		fmt.Fprintf(os.Stderr, "promptsmith: could not parse extraction JSON (%v), showing raw output\n", err)
+		fmt.Fprintf(os.Stderr, "pps: could not parse extraction JSON (%v), showing raw output\n", err)
 		return raw
 	}
 
@@ -323,7 +323,7 @@ func runTemplatize(cfg config, key string, temp float64, prompt string, maxVars 
 		if err := os.WriteFile(varsOut, append(blob, '\n'), 0o644); err != nil {
 			fail("cannot write %s — %v", varsOut, err)
 		}
-		fmt.Fprintf(os.Stderr, "promptsmith: wrote %s\n", varsOut)
+		fmt.Fprintf(os.Stderr, "pps: wrote %s\n", varsOut)
 	}
 
 	var sb strings.Builder
@@ -393,9 +393,9 @@ func runRender(prompt string, varPairs []string, varsFile string, strict bool) s
 	}
 
 	if remaining := findPlaceholders(out); len(remaining) > 0 {
-		msg := "promptsmith: unfilled placeholders: " + strings.Join(remaining, ", ")
+		msg := "pps: unfilled placeholders: " + strings.Join(remaining, ", ")
 		if strict {
-			fail("%s", strings.TrimPrefix(msg, "promptsmith: "))
+			fail("%s", strings.TrimPrefix(msg, "pps: "))
 		}
 		fmt.Fprintln(os.Stderr, msg)
 	}
