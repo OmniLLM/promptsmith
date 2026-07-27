@@ -305,19 +305,35 @@ func renderMarkdownLine(line string) string {
 // renderCodeBlock frames a fenced block with a labeled top rule and a bottom
 // rule, but leaves each content line FLUSH-LEFT and unstyled. No per-line border
 // is added, so selecting the block copies the prompt verbatim — critical for the
-// polished-prompt output, which users paste elsewhere.
+// polished-prompt output, which users paste elsewhere. The rule is sized to the
+// block's own content width (capped to the terminal), not the full terminal, so
+// short prompts don't get an oversized banner.
 func renderCodeBlock(lang string, body []string) string {
-	w := termWidth()
+	// Widest content line, so the frame hugs the block instead of the screen.
+	w := 0
+	for _, l := range body {
+		if v := visLen(l); v > w {
+			w = v
+		}
+	}
 	label := ""
 	if lang != "" {
 		label = " " + lang + " "
 	}
-	top := dim("╶─" + label + strings.Repeat("─", maxInt(4, w-visLen(label)-3)) + "╴")
-	bottom := dim("╶" + strings.Repeat("─", w-2) + "╴")
+	if min := visLen(label) + 4; w < min {
+		w = min
+	}
+	if w > termWidth() {
+		w = termWidth()
+	}
+	top := dim("╶─" + label + strings.Repeat("─", maxInt(1, w-visLen(label)-2)) + "╴")
+	bottom := dim("╶" + strings.Repeat("─", w) + "╴")
 	var sb strings.Builder
-	sb.WriteString(top + "\n")
+	sb.WriteString(top)
+	sb.WriteByte('\n')
 	for _, l := range body {
-		sb.WriteString(l + "\n") // verbatim, copy-paste clean
+		sb.WriteString(l) // verbatim, copy-paste clean
+		sb.WriteByte('\n')
 	}
 	sb.WriteString(bottom)
 	return sb.String()
