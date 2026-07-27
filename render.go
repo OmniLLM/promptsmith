@@ -158,7 +158,10 @@ func renderTable(headers []string, rows [][]string) string {
 	line(b.tl, b.tm, b.tr)
 	emit(headers, bold)
 	line(b.ml, b.mm, b.mr)
-	for _, r := range rows {
+	for i, r := range rows {
+		if i > 0 {
+			line(b.ml, b.mm, b.mr) // row delimiter between data rows
+		}
 		emit(r, nil)
 	}
 	line(b.bl, b.bm, b.br)
