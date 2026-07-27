@@ -13,9 +13,48 @@ import (
 	"strings"
 )
 
-// runShell drives the interactive session. It reuses polish() for the first
-// turn and runIterate() for every refinement, so no new provider plumbing is
-// needed. cfg/key/temp are captured once from the resolved CLI config.
+// shellTurn is the result of one polish/refine turn: the extracted prompt (for
+// the next refine turn) plus the model's full explanatory markdown (rendered as
+// the turn's output).
+type shellTurn struct {
+	Polished string // the rewritten prompt, plain text — carried into the next turn
+	Full     string // the model's full markdown: prompt + what-changed + tweaks
+}
+
+// runShellTurn performs one polish (before == "") or refine turn. It uses the
+// tool's real EXPLANATORY (non-raw) optimizer, whose output already contains a
+// fenced prompt plus a "what changed and why" breakdown and optional tweaks —
+// exactly the sections the shell wants to show. extractPrompt then pulls the
+// fenced prompt out so the next refine turn iterates on the prompt itself.
+func runShellTurn(cfg config, key string, temp float64, before, message string) shellTurn {
+	var full string
+	if before == "" {
+		full = polish(cfg, cfg.BaseURL, key, cfg.Model, false, temp, message)
+	} else {
+		full = runIterate(cfg, key, temp, before, message, false)
+	}
+	full = strings.TrimSpace(full)
+	return shellTurn{Polished: extractPrompt(full), Full: full}
+}
+
+// renderShellTurn prints the turn: the prompt we started from, then the model's
+// full explanatory output (polished prompt + what changed + notes).
+func renderShellTurn(before, message string, t shellTurn) {
+	var md strings.Builder
+	cur := before
+	label := "## Current prompt"
+	if before == "" {
+		cur = message
+		label = "## Original prompt"
+	}
+	fmt.Fprintf(&md, "%s\n```text\n%s\n```\n\n", label, strings.TrimSpace(cur))
+	md.WriteString(t.Full)
+	fmt.Println(renderMarkdown(strings.TrimRight(md.String(), "\n")))
+}
+
+// runShell drives the interactive session. Each turn calls runShellTurn (which
+// returns a structured result) and renderShellTurn (which prints the fixed
+// sections). cfg/key/temp are captured once from the resolved CLI config.
 func runShell(cfg config, key string, temp float64) {
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 64*1024), 1<<20)
@@ -47,18 +86,22 @@ func runShell(cfg config, key string, temp float64) {
 			continue
 		}
 
-		// Normal turn: first message polishes, later messages refine.
+		// Normal turn. The shell asks for a STRUCTURED result (JSON) so it can
+		// always show the same sections — current prompt, evaluation, polished
+		// prompt, how/why, notes — regardless of how the model likes to format
+		// prose. `current` holds the prompt we're iterating on ("" on turn one).
+		before := current
 		if current == "" {
 			fmt.Println(dim("  polishing…"))
-			out := polish(cfg, cfg.BaseURL, key, cfg.Model, true, temp, line)
-			current = extractPrompt(out)
 		} else {
 			fmt.Println(dim("  refining…"))
-			out := runIterate(cfg, key, temp, current, line, true)
-			current = extractPrompt(out)
+		}
+		res := runShellTurn(cfg, key, temp, before, line)
+		if res.Polished != "" {
+			current = res.Polished
 		}
 		fmt.Println()
-		fmt.Println(renderMarkdown("## Current prompt\n```text\n" + current + "\n```"))
+		renderShellTurn(before, line, res)
 		fmt.Println()
 	}
 	if err := in.Err(); err != nil {
@@ -186,7 +229,7 @@ func shellPrompt(kind string) string {
 func printShellBanner(cfg config) {
 	fmt.Println(bold("promptsmith interactive shell") +
 		dim("  ("+cfg.Provider+" · "+cfg.Model+")"))
-	fmt.Println(dim("Type a prompt to polish it, then keep talking to refine it. :help for commands, :quit to exit."))
+	fmt.Println(dim("Type a prompt to polish it (with a full breakdown), then keep talking to refine it. :help for commands, :quit to exit."))
 	fmt.Println()
 }
 
