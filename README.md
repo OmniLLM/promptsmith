@@ -98,7 +98,7 @@ adding a one-line caveat if a technique is a poor fit for the task.
 | `graphprompt` | Inputs are graphs/relations — nodes, edges, entity links |
 
 The reference guides are embedded in the binary at build time from
-`prompt-engineering/references/` (`install.sh` syncs them), so `--show-technique`
+`techniques/`, so `--show-technique`
 works with no network and no repo checkout.
 
 ## Modes and styles
@@ -550,35 +550,34 @@ Works for the `openai-compatible` shape and `azure-foundry` (both expose
 ## Hermes skill
 
 This repo also ships the original **`prompt-engineering`** Hermes Agent skill
-(the methodology the CLI is built on), including a full reference guide per
-technique under `prompt-engineering/references/`. Install it with:
+(the methodology the CLI is built on) as `SKILL.md`, backed by a full reference
+guide per technique under `techniques/`. Install it with:
 
 ```bash
-ln -s "$PWD/prompt-engineering" ~/.hermes/skills/prompt-engineering
+ln -s "$PWD" ~/.hermes/skills/prompt-engineering
 ```
 
 ## Layout
 
 ```
 promptsmith/
-  promptsmith/            the CLI (Go)
-    main.go               single-file Go CLI (stdlib only)
-    techniques.go         technique catalog + embedded reference guides
-    modes.go              optimization modes/styles, iterate + eval templates
-    compare.go            A/B compare, templatize, local variable render
-    copilot.go            GitHub Copilot OAuth device flow + token refresh
-    techniques/           embedded copies of the 17 guides (synced by install.sh)
-    go.mod
-    install.sh            installer (go build + config scaffold)
-  prompt-engineering/     the Hermes skill (methodology + 17 reference guides)
-    PROMPTSMITH_SYSTEM_PROMPT.md   promptsmith's own agent system prompt
+  main.go               single-file Go CLI (stdlib only)
+  techniques.go         technique catalog + embedded reference guides
+  modes.go              optimization modes/styles, iterate + eval templates
+  compare.go            A/B compare, templatize, local variable render
+  copilot.go            GitHub Copilot OAuth device flow + token refresh
+  techniques/           the 17 reference guides (embedded at build time)
+  go.mod
+  install.sh            installer (go build + config scaffold)
+  SKILL.md              the Hermes skill (methodology + technique selector)
+  PROMPTSMITH_SYSTEM_PROMPT.md   promptsmith's own agent system prompt
 ```
 
 ## promptsmith's own system prompt
 
 The identity promptsmith runs on is documented as a portable, paste-anywhere
 system prompt in
-[`prompt-engineering/PROMPTSMITH_SYSTEM_PROMPT.md`](prompt-engineering/PROMPTSMITH_SYSTEM_PROMPT.md)
+[`PROMPTSMITH_SYSTEM_PROMPT.md`](PROMPTSMITH_SYSTEM_PROMPT.md)
 — use it to give any LLM or agent promptsmith behaviour without the CLI.
 
 To see the *live* prompt the CLI actually sends (base doctrine plus the active

@@ -2,8 +2,7 @@ package main
 
 // Technique catalog: the 17 prompt-engineering techniques from
 // promptingguide.ai. The full reference guide for each is embedded from
-// techniques/*.md (synced from ../prompt-engineering/references by install.sh)
-// so the binary can print a guide or inject it into the system prompt when the
+// techniques/*.md so the binary can print a guide or inject it into the system prompt when the
 // user pins a technique with -T/--technique.
 
 import (
