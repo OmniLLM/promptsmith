@@ -53,6 +53,29 @@ func wrapShellInput(message string, first bool) string {
 		"<refinement>\n" + strings.TrimSpace(message) + "\n</refinement>"
 }
 
+// shellExecSystem is the system prompt used by :eval. It deliberately contains NONE
+// of the prompt-optimizing doctrine: for an evaluation run we want a plain,
+// neutral assistant that simply DOES what the polished prompt says, so the user
+// sees the real-world output their prompt would actually produce.
+const shellExecSystem = `You are a capable, helpful assistant. Execute the user's
+instructions exactly as written and answer them directly. Do not critique,
+rewrite, or comment on the wording of the request — just produce the output it
+asks for. If the request is genuinely ambiguous or missing information you need,
+make the most reasonable assumption, state it in one line, and proceed.`
+
+// runShellEval executes the current polished prompt in a FRESH conversation — the
+// polishing history is deliberately excluded so the model sees only the prompt
+// itself, exactly as a downstream consumer would. Optional extra text is
+// appended as the input/data the prompt should operate on.
+func runShellEval(cfg config, key string, temp float64, prompt, extra string) string {
+	user := strings.TrimSpace(prompt)
+	if extra = strings.TrimSpace(extra); extra != "" {
+		user += "\n\n---\n\n" + extra
+	}
+	history := []chatMsg{{Role: "user", Content: user}}
+	return strings.TrimSpace(completeChat(cfg, cfg.BaseURL, key, cfg.Model, temp, shellExecSystem, history))
+}
+
 // runShellTurn sends the FULL conversation so far and returns the assistant's
 // reply. history already includes the newest user turn.
 func runShellTurn(cfg config, key string, temp float64, history []chatMsg) string {
@@ -70,9 +93,10 @@ func runShellTurn(cfg config, key string, temp float64, history []chatMsg) strin
 // (for context), the latest clean prompt (for :show/:save/:raw), and whether the
 // first prompt has been sent yet.
 type session struct {
-	history []chatMsg
-	current string
-	started bool
+	history  []chatMsg
+	current  string
+	lastEval string
+	started  bool
 }
 
 // the working state the user is refining.
@@ -101,7 +125,7 @@ func runShell(cfg config, key string, temp float64) {
 
 		// Meta-commands.
 		if strings.HasPrefix(line, ":") {
-			if quit := handleShellCommand(line, s); quit {
+			if quit := handleShellCommand(line, s, cfg, key, temp); quit {
 				break
 			}
 			continue
@@ -200,7 +224,7 @@ func firstFencedBlock(s string) (string, bool) {
 }
 
 // handleShellCommand runs a ":" meta-command. Returns true to end the session.
-func handleShellCommand(line string, s *session) bool {
+func handleShellCommand(line string, s *session, cfg config, key string, temp float64) bool {
 	cmd, arg, _ := strings.Cut(strings.TrimPrefix(line, ":"), " ")
 	arg = strings.TrimSpace(arg)
 	switch cmd {
@@ -214,9 +238,42 @@ func handleShellCommand(line string, s *session) bool {
 		} else {
 			fmt.Println(renderMarkdown("```text\n" + s.current + "\n```"))
 		}
+	case "eval", "evaluate", "evaluation", "run", "try":
+		if s.current == "" {
+			fmt.Println(dim("  (no prompt yet — polish one first, then :eval it)"))
+			break
+		}
+		fmt.Println(dim("  evaluating…"))
+		out := runShellEval(cfg, key, temp, s.current, arg)
+		if out == "" {
+			fmt.Println(yellow("  (empty response)"))
+			break
+		}
+		s.lastEval = out
+		fmt.Println()
+		fmt.Println(dim("  ── evaluation output ──"))
+		fmt.Println(renderMarkdown(out))
+		fmt.Println()
+	case "score", "grade":
+		if s.current == "" {
+			fmt.Println(dim("  (no prompt yet — polish one first)"))
+			break
+		}
+		fmt.Println(dim("  scoring…"))
+		report, _ := runEval(cfg, key, temp, s.current, false)
+		fmt.Println()
+		fmt.Println(renderMarkdown(report))
+		fmt.Println()
+	case "evalraw":
+		if s.lastEval == "" {
+			fmt.Println(dim("  (nothing evaluated yet — try :eval)"))
+		} else {
+			fmt.Println(s.lastEval)
+		}
 	case "reset", "new":
 		s.history = nil
 		s.current = ""
+		s.lastEval = ""
 		s.started = false
 		fmt.Println(dim("  session cleared — next line starts a fresh polish"))
 	case "raw":
@@ -254,7 +311,7 @@ func shellPrompt(kind string) string {
 func printShellBanner(cfg config) {
 	fmt.Println(bold("promptsmith interactive shell") +
 		dim("  ("+cfg.Provider+" · "+cfg.Model+")"))
-	fmt.Println(dim("Type a prompt to polish it (with a full breakdown), then keep talking to refine it. :help for commands, :quit to exit."))
+	fmt.Println(dim("Type a prompt to polish it (with a full breakdown), then keep talking to refine it. :eval runs it, :help for commands, :quit to exit."))
 	fmt.Println()
 }
 
@@ -263,6 +320,9 @@ func printShellHelp() {
 		{":show", "print the current polished prompt (framed)"},
 		{":raw", "print it unstyled/flush-left for clean copy or redirect"},
 		{":save <file>", "write the current prompt to a file"},
+		{":eval [input]", "run the current prompt for real and show the answer"},
+		{":evalraw", "print the last evaluation output unstyled"},
+		{":score", "grade the current prompt (quality report, no execution)"},
 		{":reset", "clear the session and start a fresh polish"},
 		{":help", "show this help"},
 		{":quit", "exit (or Ctrl-D)"},

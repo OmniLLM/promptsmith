@@ -805,7 +805,9 @@ Advanced operations:
 Interactive shell:
   Bare 'pps' (or 'pps --chat') on a terminal opens a session. Type a prompt to
   polish it, then keep typing to refine that same prompt turn by turn. Commands:
-  :show  :raw  :save <file>  :reset  :help  :quit  (Ctrl-D also exits).
+  :show  :raw  :save <file>  :eval [input]  :evalraw  :score  :reset  :help
+  :quit  (Ctrl-D also exits). :eval runs the polished prompt for real so you can
+  see its output without leaving the session.
 
 Examples:
   pps                                               # interactive session
