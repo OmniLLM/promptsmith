@@ -96,6 +96,7 @@ type session struct {
 	history  []chatMsg
 	current  string
 	lastEval string
+	lastRun  string
 	started  bool
 }
 
@@ -238,31 +239,38 @@ func handleShellCommand(line string, s *session, cfg config, key string, temp fl
 		} else {
 			fmt.Println(renderMarkdown("```text\n" + s.current + "\n```"))
 		}
-	case "eval", "evaluate", "evaluation", "run", "try":
+	case "eval", "evaluate", "evaluation", "score", "grade":
+		// Assess the LAST optimized prompt, exactly like `pps --eval` on the CLI.
 		if s.current == "" {
 			fmt.Println(dim("  (no prompt yet — polish one first, then :eval it)"))
 			break
 		}
 		fmt.Println(dim("  evaluating…"))
+		report, _ := runEval(cfg, key, temp, s.current, false)
+		if strings.TrimSpace(report) == "" {
+			fmt.Println(yellow("  (empty response)"))
+			break
+		}
+		s.lastEval = report
+		fmt.Println()
+		fmt.Println(dim("  ── evaluation report ──"))
+		fmt.Println(renderMarkdown(report))
+		fmt.Println()
+	case "run", "try", "exec":
+		if s.current == "" {
+			fmt.Println(dim("  (no prompt yet — polish one first, then :run it)"))
+			break
+		}
+		fmt.Println(dim("  running…"))
 		out := runShellEval(cfg, key, temp, s.current, arg)
 		if out == "" {
 			fmt.Println(yellow("  (empty response)"))
 			break
 		}
-		s.lastEval = out
+		s.lastRun = out
 		fmt.Println()
-		fmt.Println(dim("  ── evaluation output ──"))
+		fmt.Println(dim("  ── run output ──"))
 		fmt.Println(renderMarkdown(out))
-		fmt.Println()
-	case "score", "grade":
-		if s.current == "" {
-			fmt.Println(dim("  (no prompt yet — polish one first)"))
-			break
-		}
-		fmt.Println(dim("  scoring…"))
-		report, _ := runEval(cfg, key, temp, s.current, false)
-		fmt.Println()
-		fmt.Println(renderMarkdown(report))
 		fmt.Println()
 	case "evalraw":
 		if s.lastEval == "" {
@@ -270,10 +278,17 @@ func handleShellCommand(line string, s *session, cfg config, key string, temp fl
 		} else {
 			fmt.Println(s.lastEval)
 		}
+	case "runraw":
+		if s.lastRun == "" {
+			fmt.Println(dim("  (nothing run yet — try :run)"))
+		} else {
+			fmt.Println(s.lastRun)
+		}
 	case "reset", "new":
 		s.history = nil
 		s.current = ""
 		s.lastEval = ""
+		s.lastRun = ""
 		s.started = false
 		fmt.Println(dim("  session cleared — next line starts a fresh polish"))
 	case "raw":
@@ -311,7 +326,7 @@ func shellPrompt(kind string) string {
 func printShellBanner(cfg config) {
 	fmt.Println(bold("promptsmith interactive shell") +
 		dim("  ("+cfg.Provider+" · "+cfg.Model+")"))
-	fmt.Println(dim("Type a prompt to polish it (with a full breakdown), then keep talking to refine it. :eval runs it, :help for commands, :quit to exit."))
+	fmt.Println(dim("Type a prompt to polish it (with a full breakdown), then keep talking to refine it. :eval scores it, :run executes it, :help for commands, :quit to exit."))
 	fmt.Println()
 }
 
@@ -320,9 +335,10 @@ func printShellHelp() {
 		{":show", "print the current polished prompt (framed)"},
 		{":raw", "print it unstyled/flush-left for clean copy or redirect"},
 		{":save <file>", "write the current prompt to a file"},
-		{":eval [input]", "run the current prompt for real and show the answer"},
-		{":evalraw", "print the last evaluation output unstyled"},
-		{":score", "grade the current prompt (quality report, no execution)"},
+		{":eval", "assess the current optimized prompt (score + patch plan)"},
+		{":evalraw", "print the last evaluation report unstyled"},
+		{":run [input]", "actually run the current prompt and show the answer"},
+		{":runraw", "print the last run output unstyled"},
 		{":reset", "clear the session and start a fresh polish"},
 		{":help", "show this help"},
 		{":quit", "exit (or Ctrl-D)"},
